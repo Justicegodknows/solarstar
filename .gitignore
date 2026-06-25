@@ -1,0 +1,6 @@
+# Secrets — never commit
+.env
+
+# n8n-as-code local state / secrets
+**/.n8n-state.json
+**/.n8n-sync-events.jsonl

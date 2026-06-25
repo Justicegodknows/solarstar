@@ -1,0 +1,39 @@
+{
+  "version": 4,
+  "activeEnvironmentId": "solarflar",
+  "environmentTargets": [
+    {
+      "id": "managed",
+      "name": "managed",
+      "kind": "managed-instance",
+      "managedInstanceId": "managed-339f8aa9"
+    },
+    {
+      "id": "solarflar-2",
+      "name": "solarflar",
+      "kind": "external-instance",
+      "url": "http://127.0.0.1:5678"
+    }
+  ],
+  "environments": [
+    {
+      "id": "solarflar",
+      "name": "solarflar",
+      "syncSlug": "solarflar",
+      "environmentTargetId": "solarflar-2",
+      "projectId": "personal",
+      "projectName": "Personal",
+      "workflowsPath": "workflows/solarflar",
+      "folderSync": true,
+      "description": "This is for automated email delivery system and whatsapp messges",
+      "nativeMcp": {
+        "enabled": true,
+        "url": "http://localhost:5678/mcp-server/http",
+        "mode": "assist",
+        "allowRemoteExposure": false,
+        "allowExecutionData": false,
+        "requireSyncBack": true
+      }
+    }
+  ]
+}
