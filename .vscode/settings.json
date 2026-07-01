@@ -1,6 +1,6 @@
 {
     "n8nMcp.apiUrl": "http://localhost:5678/api/v1",
-    "n8nMcp.apiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYzIwNjJlMC05Yjg1LTQ0ODMtYjEwZi05ZjJhYzQ4Y2IxMmYiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiYTJjZDBlNzEtMTgyNS00ZjhmLTk5NTYtODZjYjI4MTY1MzhhIiwiaWF0IjoxNzgyMzcyMDQwfQ.mjRoE1JkRkgOjgewkwvkGYDDG7kAnRGifmFaykCpyg8",
+    "n8nMcp.apiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3NDIxNzVjYS1iYzFlLTQzYzktYWEwZi05YjI4NWJmNWQ3MmMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiZDQ0YTU5MjItMDI4Mi00ODAwLTgyNDMtNTNiOTJjMmRlZjM1IiwiaWF0IjoxNzgyMzgwMzgzfQ.FUI89xzZJeV0ptLugVKNthhkd3YOOMv19TFlVDxdA4M",
     "n8nMcp.enabled": true,
     "n8nMcp.debug": false,
     "mcpServers": {

@@ -15,7 +15,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // Validate                           code
 // HumanReview                        wait
 // SendGate                           code
-// SendEmail                          microsoftOutlook
+// SendEmail                          noOp
 // InvalidForManualFollowUp           noOp
 //
 // ROUTING MAP
@@ -173,7 +173,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
     Validate = {
         mode: 'runOnceForEachItem',
         language: 'javaScript',
-        jsCode: `const item = $input.first().json;
+        jsCode: `const item = $input.item.json;
 const generatedText = String(item.response ?? '').trim();
 const firstName = String(item.customer_name ?? '').trim().split(/\\s+/)[0] ?? '';
 const hasText = generatedText.length >= 50 && generatedText.length <= 1500;
@@ -230,17 +230,11 @@ return {
         id: '8dd7edb4-d79d-4a51-a352-191af9a93323',
         webhookId: '1a44c810-34ff-4d6f-bef6-e8bf5c559684',
         name: 'Send Email',
-        type: 'n8n-nodes-base.microsoftOutlook',
-        version: 2,
+        type: 'n8n-nodes-base.noOp',
+        version: 1,
         position: [1820, 260],
     })
-    SendEmail = {
-        resource: 'message',
-        operation: 'send',
-        toRecipients: '={{$json.email}}',
-        subject: '={{"Wartungserinnerung fuer Ihre " + $json.equipment_type + " - SolarStar"}}',
-        message: '={{$json.generated_email_text}}',
-    };
+    SendEmail = {};
 
     @node({
         id: '4ed03870-0955-420c-82a5-f2bdfc1efb4c',
