@@ -2,34 +2,36 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : SolarStar Phase 1 - Wartungs-Erinnerungen
-// Nodes   : 10  |  Connections: 10
+// Nodes   : 11  |  Connections: 11
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
 // Property name                    Node type (short)         Flags
 // TestTrigger                        webhook
 // ScheduleTrigger                    scheduleTrigger
-// CustomerData                       code
+// CustomerData                       httpRequest                [creds]
+// MapHeroCustomers                   code
 // GenerateEmail                      httpRequest
 // AttachCustomerFields               merge
 // Validate                           code
 // HumanReview                        wait
 // SendGate                           code
-// SendEmail                          noOp
+// SendEmail                          microsoftOutlook           [creds]
 // InvalidForManualFollowUp           noOp
 //
 // ROUTING MAP
 // ──────────────────────────────────────────────────────────────────
 // TestTrigger
 //    → CustomerData
-//      → GenerateEmail
-//        → AttachCustomerFields.in(1)
-//          → Validate
-//            → HumanReview
-//              → SendGate
-//                → SendEmail
-//            → InvalidForManualFollowUp
-//      → AttachCustomerFields (↩ loop)
+//      → MapHeroCustomers
+//        → GenerateEmail
+//          → AttachCustomerFields.in(1)
+//            → Validate
+//              → HumanReview
+//                → SendGate
+//                  → SendEmail
+//              → InvalidForManualFollowUp
+//        → AttachCustomerFields (↩ loop)
 // ScheduleTrigger
 //    → CustomerData (↩ loop)
 // </workflow-map>
@@ -88,42 +90,54 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
     @node({
         id: '50926bd3-0dac-4995-a68b-32394de26dda',
         name: 'Customer Data',
-        type: 'n8n-nodes-base.code',
-        version: 2,
+        type: 'n8n-nodes-base.httpRequest',
+        version: 4.4,
         position: [460, 260],
+        credentials: { httpHeaderAuth: { id: 'bsL1r7l7hguXNpjs', name: 'HERO API (read-only)' } },
     })
     CustomerData = {
+        method: 'POST',
+        url: 'https://login.hero-software.de/api/external/v7/graphql',
+        authentication: 'genericCredentialType',
+        genericAuthType: 'httpHeaderAuth',
+        sendBody: true,
+        contentType: 'json',
+        specifyBody: 'json',
+        jsonBody:
+            '{"query": "query GetDueMaintenance($start: DateTime, $end: DateTime) { field_service_jobs(start: $start, end: $end, first: 200) { id type start title customer { id full_name email } } }", "variables": {"start": "{{$now.minus({days:380}).toISO()}}", "end": "{{$now.minus({days:350}).toISO()}}"}}',
+    };
+
+    @node({
+        id: '1ece3681-5571-46f5-88ee-8601ee53a9e1',
+        name: 'Map HERO Customers',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [580, 260],
+    })
+    MapHeroCustomers = {
         mode: 'runOnceForAllItems',
         language: 'javaScript',
-        jsCode: `return [
-  {
+        jsCode: `const jobs = $input.first().json.data?.field_service_jobs ?? [];
+const seenEmails = new Set();
+const items = [];
+
+for (const job of jobs) {
+  if (job.type !== 'maintenance') continue;
+  const email = String(job.customer?.email ?? '').trim();
+  if (!email || seenEmails.has(email)) continue;
+  seenEmails.add(email);
+
+  items.push({
     json: {
-      customer_name: 'Anna Schneider',
-      email: 'anna.schneider@example.de',
-      equipment_type: 'Pelletheizung',
-      last_service_date: '2025-11-20',
-      voucher_eligible: true,
+      customer_name: String(job.customer?.full_name ?? '').trim(),
+      email,
+      equipment_type: job.title ?? '',
+      last_service_date: job.start ? String(job.start).slice(0, 10) : '',
     },
-  },
-  {
-    json: {
-      customer_name: 'Mehmet Yilmaz',
-      email: 'mehmet.yilmaz@example.de',
-      equipment_type: 'Waermepumpe',
-      last_service_date: '2025-10-08',
-      voucher_eligible: false,
-    },
-  },
-  {
-    json: {
-      customer_name: 'Julia Becker',
-      email: 'julia.becker@example.de',
-      equipment_type: 'Gasheizung',
-      last_service_date: '2025-09-14',
-      voucher_eligible: true,
-    },
-  },
-];`,
+  });
+}
+
+return items;`,
     };
 
     @node({
@@ -140,14 +154,8 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         sendBody: true,
         contentType: 'json',
         specifyBody: 'json',
-        jsonBody: `={
-  "model": "mistral",
-  "stream": false,
-  "prompt": "Du bist Assistent fuer SolarStar (deutscher Heizungsbetrieb). Schreibe eine kurze, freundliche Wartungserinnerung auf Deutsch. Nutze nur diese Daten und erfinde nichts: Name: " + $json.customer_name + ", Anlagentyp: " + $json.equipment_type + ", Letzte Wartung: " + $json.last_service_date + ", Gutscheinberechtigt: " + ($json.voucher_eligible ? "ja" : "nein") + ". Anforderungen: 1) Beginne mit der direkten Anrede und dem Vornamen der Person. 2) 90-160 Woerter. 3) Wenn Gutscheinberechtigt=ja, nenne einen Wartungsgutschein freundlich. 4) Keine Preiszusagen, keine nicht vorhandenen Details. 5) Klarer Call-to-Action fuer Terminvereinbarung bei SolarStar.",
-  "options": {
-    "temperature": 0.3
-  }
-}`,
+        jsonBody:
+            '{"model": "mistral", "stream": false, "prompt": "Du bist Assistent fuer SolarStar (deutscher Heizungsbetrieb). Schreibe eine kurze, freundliche Wartungserinnerung auf Deutsch. Nutze nur diese Daten und erfinde nichts: Name: {{$json.customer_name}}, Anlagentyp: {{$json.equipment_type}}, Letzte Wartung: {{$json.last_service_date}}. Anforderungen: 1) Beginne mit der direkten Anrede und dem Vornamen der Person. 2) 90-160 Woerter. 3) Keine Preiszusagen, keine nicht vorhandenen Details, keine Erwaehnung von Gutscheinen. 4) Klarer Call-to-Action fuer Terminvereinbarung bei SolarStar.", "options": {"temperature": 0.3}}',
     };
 
     @node({
@@ -228,13 +236,28 @@ return {
 
     @node({
         id: '8dd7edb4-d79d-4a51-a352-191af9a93323',
-        webhookId: '1a44c810-34ff-4d6f-bef6-e8bf5c559684',
+        webhookId: '44d8472b-293d-4425-bd54-628b30f6d030',
         name: 'Send Email',
-        type: 'n8n-nodes-base.noOp',
-        version: 1,
+        type: 'n8n-nodes-base.microsoftOutlook',
+        version: 2,
         position: [1820, 260],
+        credentials: {
+            microsoftOutlookOAuth2Api: {
+                id: 'j14SWpx5SR60LGem',
+                name: 'SolarStar Service Mailbox (info@juergenhohnen.de)',
+            },
+        },
     })
-    SendEmail = {};
+    SendEmail = {
+        resource: 'message',
+        operation: 'send',
+        toRecipients: '={{$json.email}}',
+        subject: 'Ihre Wartungserinnerung von SolarStar',
+        bodyContent: '={{$json.generated_email_text}}',
+        additionalFields: {
+            bodyContentType: 'Text',
+        },
+    };
 
     @node({
         id: '4ed03870-0955-420c-82a5-f2bdfc1efb4c',
@@ -253,8 +276,9 @@ return {
     defineRouting() {
         this.TestTrigger.out(0).to(this.CustomerData.in(0));
         this.ScheduleTrigger.out(0).to(this.CustomerData.in(0));
-        this.CustomerData.out(0).to(this.GenerateEmail.in(0));
-        this.CustomerData.out(0).to(this.AttachCustomerFields.in(0));
+        this.CustomerData.out(0).to(this.MapHeroCustomers.in(0));
+        this.MapHeroCustomers.out(0).to(this.GenerateEmail.in(0));
+        this.MapHeroCustomers.out(0).to(this.AttachCustomerFields.in(0));
         this.GenerateEmail.out(0).to(this.AttachCustomerFields.in(1));
         this.AttachCustomerFields.out(0).to(this.Validate.in(0));
         this.Validate.out(0).to(this.HumanReview.in(0));
