@@ -231,7 +231,9 @@ return {
     SendGate = {
         mode: 'runOnceForAllItems',
         language: 'javaScript',
-        jsCode: 'return $input.all().filter((item) => item.json.is_valid === true);',
+        // Human Review resumes via a webhook, which wraps the approval payload under `.body`
+        // (n8n always nests incoming webhook JSON as { headers, params, query, body }).
+        jsCode: 'return $input.all().filter((item) => item.json.body?.is_valid === true);',
     };
 
     @node({
@@ -251,9 +253,10 @@ return {
     SendEmail = {
         resource: 'message',
         operation: 'send',
-        toRecipients: '={{$json.email}}',
+        // Fields come from the Human Review resume webhook body (see Send Gate comment above).
+        toRecipients: '={{$json.body.email}}',
         subject: 'Ihre Wartungserinnerung von SolarStar',
-        bodyContent: '={{$json.generated_email_text}}',
+        bodyContent: '={{$json.body.generated_email_text}}',
         additionalFields: {
             bodyContentType: 'Text',
         },
