@@ -243,7 +243,7 @@ return {
         position: [1820, 260],
         credentials: {
             microsoftOutlookOAuth2Api: {
-                id: 'j14SWpx5SR60LGem',
+                id: 'CWeYIuXpSepKw28k',
                 name: 'SolarStar Service Mailbox (justice.godknows2@outlook.com)',
             },
         },

@@ -61,3 +61,27 @@ Do not reconstruct `workflowsPath` from environment name/id, instance identifier
 
 Never write `n8nac-config.json`, `~/.n8n-manager`, or n8n-manager secret files by hand.
 <!-- n8n-as-code-end -->
+
+---
+
+## Project Overview
+
+SolarStar Phase 1: an n8n workflow (`workflows/solarflar/solarstar-phase1-reminder.workflow.ts`, workflow ID `TyzTNzhz9QuLKNiH`) that reminds customers about annual maintenance. It pulls due customers from the **HERO Software** GraphQL API, drafts a German reminder email with a local **Ollama** LLM, validates the draft, routes it through a human-approval wait step, and sends it via **Microsoft Outlook** (Graph API).
+
+There is no `package.json` / npm project here — this repo *is* the n8n-as-code workflow source. There is nothing to `npm install`; the only tooling is `npx --yes n8nac` (see generated section above) and Docker Compose for the n8n/Postgres runtime.
+
+## Environment Setup
+
+1. **Runtime**: `docker compose up -d` starts `n8n` (port 5678) and `n8n_postgres`. Requires `.env` (gitignored) with `POSTGRES_PASSWORD` and `N8N_ENCRYPTION_KEY`. `CLIENT_SECRET_VALUE` and `HERO_API_KEY` also live in `.env` and are read manually when creating/patching credentials (not consumed by docker-compose itself).
+2. **n8n API key**: stored in `.vscode/settings.json` under `n8nMcp.apiKey` — this is the working key for MCP/API calls, not anything in `.env`.
+3. **Ollama**: expected on the Docker host at `http://172.17.0.1:11434` (not a compose service). Model used: `mistral`.
+4. **HERO Software API**: GraphQL endpoint `https://login.hero-software.de/api/external/v7/graphql`, header `Authorization: Bearer <HERO_API_KEY>`. n8n credential type `httpHeaderAuth`.
+5. **Outlook send credential**: `n8n-nodes-base.microsoftOutlook` node uses `microsoftOutlookOAuth2Api`. This credential type has no dedicated tenant field — single-tenant Azure AD apps require manually overriding `authUrl`/`accessTokenUrl` to `https://login.microsoftonline.com/<tenantId>/oauth2/v2.0/{authorize,token}`. After creating/patching the credential, a human must still complete "Connect my account" in the n8n UI — config alone does not establish a working token.
+
+## Key Conventions & Gotchas
+
+- **Expression prefix**: any n8n string parameter (e.g. `jsonBody`) only evaluates `{{ }}` expressions if the value starts with `=`. Without it, the template is sent as literal text with **no error** — verify via actual execution `runData`, not just "success" status.
+- **`wait` node + `resume: 'webhook'`**: discards the original item's json on resume and replaces it with the raw incoming webhook call data. Any fields the downstream nodes need (e.g. `is_valid`) must be re-attached after resume — do not assume pass-through.
+- **Azure secrets**: an app registration's "Secret ID" and "Secret Value" are both opaque/GUID-looking strings — always confirm which column was copied into `.env`'s `CLIENT_SECRET_VALUE`.
+- **Raw workflow PUT via API** (bypassing `n8nac`, e.g. when the CLI is unavailable): `settings` must only contain known keys (`executionOrder`); including extras like `binaryMode` causes a `400`.
+- Full incident history, HERO schema notes, and credential IDs are kept in repo memory (`/memories/repo/solarstar-n8n.md`) — consult it before re-diagnosing a previously-solved issue.
