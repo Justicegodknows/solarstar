@@ -246,7 +246,7 @@ return {
         credentials: {
             microsoftOutlookOAuth2Api: {
                 id: 'CWeYIuXpSepKw28k',
-                name: 'SolarStar Service Mailbox (justice.godknows2@outlook.com)',
+                name: 'SolarStar Service Mailbox (solarstar2@outlook.com)',
             },
         },
     })
