@@ -2,12 +2,13 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : SolarStar Phase 1 - Wartungs-Erinnerungen
-// Nodes   : 11  |  Connections: 11
+// Nodes   : 14  |  Connections: 14
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
 // Property name                    Node type (short)         Flags
 // TestTrigger                        webhook
+// EmployeeTestTrigger                webhook
 // ScheduleTrigger                    scheduleTrigger
 // CustomerData                       httpRequest                [creds]
 // MapHeroCustomers                   code
@@ -17,6 +18,8 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // HumanReview                        wait
 // SendGate                           code
 // SendEmail                          microsoftOutlook           [creds]
+// BuildEmployeeTestMessages          code
+// SendEmployeeTestEmail              microsoftOutlook           [creds]
 // InvalidForManualFollowUp           noOp
 //
 // ROUTING MAP
@@ -32,6 +35,9 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //                  → SendEmail
 //              → InvalidForManualFollowUp
 //        → AttachCustomerFields (↩ loop)
+// EmployeeTestTrigger
+//    → BuildEmployeeTestMessages
+//      → SendEmployeeTestEmail
 // ScheduleTrigger
 //    → CustomerData (↩ loop)
 // </workflow-map>
@@ -64,6 +70,23 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         responseBinaryPropertyName: 'data',
         httpMethod: 'POST',
         path: 'solarstar-phase1-test',
+        authentication: 'none',
+        responseMode: 'onReceived',
+        responseCode: 200,
+    };
+
+    @node({
+        id: '9b730f2a-5a70-46f6-a2e5-2a98fbec62ee',
+        webhookId: '7a7f4f6b-3a24-4688-a303-b87ec6ef9886',
+        name: 'Employee Test Trigger',
+        type: 'n8n-nodes-base.webhook',
+        version: 2.1,
+        position: [220, 500],
+    })
+    EmployeeTestTrigger = {
+        responseBinaryPropertyName: 'data',
+        httpMethod: 'POST',
+        path: 'solarstar-employee-test',
         authentication: 'none',
         responseMode: 'onReceived',
         responseCode: 200,
@@ -263,6 +286,72 @@ return {
     };
 
     @node({
+        id: '44c595e3-38db-4b61-b7d7-ae912b2da440',
+        name: 'Build Employee Test Messages',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [480, 500],
+    })
+    BuildEmployeeTestMessages = {
+        mode: 'runOnceForAllItems',
+        language: 'javaScript',
+        jsCode: `const payload = $input.first().json.body ?? {};
+const defaultRecipients = [
+  'juergen@juergenhohnen.de',
+  'fabian@juergenhohnen.de',
+  'bz4316@gmail.com',
+  'jose@juergenhohnen.de',
+  'mario@juergenhohnen.de',
+  'justicegsamuel@gmail.com',
+];
+const providedRecipients = Array.isArray(payload.recipients) ? payload.recipients : [];
+const recipients = (providedRecipients.length > 0 ? providedRecipients : defaultRecipients)
+  .map((value) => String(value ?? '').trim().toLowerCase())
+  .filter(Boolean);
+const uniqueRecipients = [...new Set(recipients)];
+const companyName = String(payload.company_name ?? 'SolarStar').trim() || 'SolarStar';
+const subject = String(payload.subject ?? '[TEST] SolarStar Mitarbeiter-Test').trim() || '[TEST] SolarStar Mitarbeiter-Test';
+const heading = String(payload.heading ?? 'SolarStar Mitarbeiter-Test').trim() || 'SolarStar Mitarbeiter-Test';
+const message = String(payload.message ?? 'Dies ist eine interne Testnachricht von SolarStar. Bitte nicht antworten.').trim()
+  || 'Dies ist eine interne Testnachricht von SolarStar. Bitte nicht antworten.';
+const sentAt = new Date().toISOString().slice(0, 10);
+const bodyHtml = '<h1>' + heading + '</h1><p>' + message + '</p><p><strong>Unternehmen:</strong> ' + companyName + '<br><strong>Zweck:</strong> Interner Versandtest am ' + sentAt + '</p>';
+
+return uniqueRecipients.map((email) => ({
+  json: {
+    email,
+    subject,
+    body_html: bodyHtml,
+  },
+}));`,
+    };
+
+    @node({
+        id: '699b49e0-8503-4224-9144-f53bc74a9d68',
+        webhookId: 'e1965246-f916-4fd4-b617-dceb33125df6',
+        name: 'Send Employee Test Email',
+        type: 'n8n-nodes-base.microsoftOutlook',
+        version: 2,
+        position: [760, 500],
+        credentials: {
+            microsoftOutlookOAuth2Api: {
+                id: 'CWeYIuXpSepKw28k',
+                name: 'SolarStar Service Mailbox (solarstar2@outlook.com)',
+            },
+        },
+    })
+    SendEmployeeTestEmail = {
+        resource: 'message',
+        operation: 'send',
+        toRecipients: '={{$json.email}}',
+        subject: '={{$json.subject}}',
+        bodyContent: '={{$json.body_html}}',
+        additionalFields: {
+            bodyContentType: 'HTML',
+        },
+    };
+
+    @node({
         id: '4ed03870-0955-420c-82a5-f2bdfc1efb4c',
         name: 'Invalid For Manual Follow-up',
         type: 'n8n-nodes-base.noOp',
@@ -278,6 +367,7 @@ return {
     @links()
     defineRouting() {
         this.TestTrigger.out(0).to(this.CustomerData.in(0));
+        this.EmployeeTestTrigger.out(0).to(this.BuildEmployeeTestMessages.in(0));
         this.ScheduleTrigger.out(0).to(this.CustomerData.in(0));
         this.CustomerData.out(0).to(this.MapHeroCustomers.in(0));
         this.MapHeroCustomers.out(0).to(this.GenerateEmail.in(0));
@@ -288,5 +378,6 @@ return {
         this.Validate.out(0).to(this.InvalidForManualFollowUp.in(0));
         this.HumanReview.out(0).to(this.SendGate.in(0));
         this.SendGate.out(0).to(this.SendEmail.in(0));
+        this.BuildEmployeeTestMessages.out(0).to(this.SendEmployeeTestEmail.in(0));
     }
 }
