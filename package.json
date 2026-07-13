@@ -5,6 +5,6 @@
     "test": "vitest"
   },
   "devDependencies": {
-    "vitest": "^latest"
+    "vitest": "^3.2.4"
   }
 }
