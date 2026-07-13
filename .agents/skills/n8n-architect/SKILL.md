@@ -496,6 +496,7 @@ npx --yes n8nac workflow activate <workflowId>
 
 For most workflow tasks:
 
+0. Read [`progress.md`](../../../progress.md) at the context root before implementing any code, and update it after your change lands.
 1. Resolve context with `env status --json`.
 2. Read `workflowsPath` from the backend response.
 3. Inspect existing workflows with `list`.

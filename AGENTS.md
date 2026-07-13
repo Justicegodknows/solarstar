@@ -64,6 +64,10 @@ Never write `n8nac-config.json`, `~/.n8n-manager`, or n8n-manager secret files b
 
 ---
 
+## Progress Log — Read First
+
+**Before implementing any code, every agent must read [`progress.md`](progress.md).** It is the shared, living record of completed work, pending tasks, and discovered gotchas across sessions. Consult it before writing or changing workflow code, and update it after any change that lands (new node, credential, flow, or gotcha).
+
 ## Project Overview
 
 SolarStar Phase 1: an n8n workflow (`workflows/solarflar/solarstar-phase1-reminder.workflow.ts`, workflow ID `TyzTNzhz9QuLKNiH`) that reminds customers about annual maintenance. It pulls due customers from the **HERO Software** GraphQL API, drafts a German reminder email with a local **Ollama** LLM, validates the draft, routes it through a human-approval wait step, and sends it via **Microsoft Outlook** (Graph API).

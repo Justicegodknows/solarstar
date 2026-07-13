@@ -412,19 +412,36 @@ return uniqueRecipients.map((email) => ({
                 mode: 'runOnceForAllItems',
                 language: 'javaScript',
                 jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
-const targets = [
+const requestedRecords = [
     {
+        record_id: 'Employee1',
         name: 'Yusuf Can',
+        email: 'yusuf@juergenhohnen.de',
         job_title: 'Assistent der Geschaeftsleitung',
         department: 'Geschaeftsleitung',
     },
     {
+        record_id: 'Employee2',
+        job_title: 'Leiter Pelletvertrieb',
+        department: 'Pelletvertrieb Team Hohnen',
+    },
+    {
+        record_id: 'Employee3',
         name: 'Mehmet Yilmaz',
+        email: 'mehmet@juergenhohnen.de',
         job_title: 'Leiter Kundendienst',
         department: 'Kundendienst',
     },
     {
+        record_id: 'Employee4',
+        job_title: 'Leiter Kundendienst',
+        email: 'mehmet@juergenhohnen.de',
+        department: 'Kundendienst',
+    },
+    {
+        record_id: 'Employee5',
         name: 'David Homan',
+        email: 'david@juergenhohnen.de',
         job_title: 'Leiter Pelletvertrieb Team Hohnen',
         department: 'Pelletvertrieb Team Hohnen',
     },
@@ -438,40 +455,54 @@ const normalize = (value) =>
         .replace(/[^a-z0-9]+/g, ' ')
         .trim();
 
-const partnerIndex = new Map();
-for (const partner of partners) {
-    const key = normalize(partner.full_name);
-    if (key) partnerIndex.set(key, partner);
-}
+const findPartner = (record) => {
+    const expectedName = normalize(record.name);
+    const expectedEmail = normalize(record.email);
+    const expectedTitle = normalize(record.job_title);
 
-const output = [];
-for (const target of targets) {
-    const key = normalize(target.name);
-    const partner = partnerIndex.get(key);
-    if (!partner?.email) continue;
+    return partners.find((partner) => {
+        const fullName = normalize(partner.full_name);
+        const email = normalize(partner.email);
+        const title = normalize(partner.title);
 
-    const subject = 'Solarflare-Check Erinnerung fuer ' + target.department;
+        if (expectedEmail && email && expectedEmail === email) return true;
+        if (expectedName && fullName && expectedName === fullName) return true;
+        if (expectedTitle && title && title.includes(expectedTitle)) return true;
+        return false;
+    });
+};
+
+const selected = requestedRecords
+    .map((record) => {
+        const partner = findPartner(record);
+        return {
+            record_id: record.record_id,
+            name: partner?.full_name || record.name || '',
+            email: partner?.email || record.email || '',
+            job_title: record.job_title || partner?.title || '',
+            department: record.department || 'Solarflare Team',
+        };
+    })
+    .filter((record) => record.email);
+
+return selected.map((record) => {
+    const subject = 'Solarflare-Check Erinnerung fuer ' + record.department;
     const body =
-        'Sehr geehrte/r ' + target.name + ',\n\n' +
+        'Sehr geehrte/r ' + record.name + ',\n\n' +
         'dies ist Ihre taegliche Erinnerung, den Solarflare-Status zu pruefen.\n\n' +
-        'Position: ' + target.job_title + '\n' +
-        'Abteilung: ' + target.department + '\n\n' +
+        'Position: ' + record.job_title + '\n' +
+        'Abteilung: ' + record.department + '\n\n' +
         'Bitte bestaetigen Sie den Abschluss des Checks im vorgesehenen Teamprozess.\n\n' +
         'Mit freundlichen Gruessen\nSolarStar Automatisierung';
 
-    output.push({
+    return {
         json: {
-            name: target.name,
-            job_title: target.job_title,
-            department: target.department,
-            email: String(partner.email).trim(),
+            ...record,
             subject,
             body,
         },
-    });
-}
-
-return output;`,
+    };
+});`,
         };
 
         @node({
@@ -485,19 +516,36 @@ return output;`,
                 mode: 'runOnceForAllItems',
                 language: 'javaScript',
                 jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
-const targets = [
+const requestedRecords = [
     {
+        record_id: 'Employee1',
         name: 'Yusuf Can',
+        email: 'yusuf@juergenhohnen.de',
         job_title: 'Assistent der Geschaeftsleitung',
         department: 'Geschaeftsleitung',
     },
     {
+        record_id: 'Employee2',
+        job_title: 'Leiter Pelletvertrieb',
+        department: 'Pelletvertrieb Team Hohnen',
+    },
+    {
+        record_id: 'Employee3',
         name: 'Mehmet Yilmaz',
+        email: 'mehmet@juergenhohnen.de',
         job_title: 'Leiter Kundendienst',
         department: 'Kundendienst',
     },
     {
+        record_id: 'Employee4',
+        job_title: 'Leiter Kundendienst',
+        email: 'mehmet@juergenhohnen.de',
+        department: 'Kundendienst',
+    },
+    {
+        record_id: 'Employee5',
         name: 'David Homan',
+        email: 'david@juergenhohnen.de',
         job_title: 'Leiter Pelletvertrieb Team Hohnen',
         department: 'Pelletvertrieb Team Hohnen',
     },
@@ -511,35 +559,49 @@ const normalize = (value) =>
         .replace(/[^a-z0-9]+/g, ' ')
         .trim();
 
-const partnerByName = new Map();
-for (const partner of partners) {
-    const key = normalize(partner.full_name);
-    if (key) partnerByName.set(key, partner);
-}
+const findPartner = (record) => {
+    const expectedName = normalize(record.name);
+    const expectedEmail = normalize(record.email);
+    const expectedTitle = normalize(record.job_title);
+
+    return partners.find((partner) => {
+        const fullName = normalize(partner.full_name);
+        const email = normalize(partner.email);
+        const title = normalize(partner.title);
+
+        if (expectedEmail && email && expectedEmail === email) return true;
+        if (expectedName && fullName && expectedName === fullName) return true;
+        if (expectedTitle && title && title.includes(expectedTitle)) return true;
+        return false;
+    });
+};
 
 const found = [];
 const missing = [];
-for (const target of targets) {
-    const partner = partnerByName.get(normalize(target.name));
-    if (partner?.email) {
+for (const record of requestedRecords) {
+    const partner = findPartner(record);
+    if (partner) {
         found.push({
-            name: target.name,
-            email: String(partner.email).trim(),
-            job_title: target.job_title,
-            department: target.department,
+            record_id: record.record_id,
+            name: partner.full_name || record.name || '',
+            email: partner.email || record.email || '',
+            job_title: record.job_title || partner.title || '',
+            department: record.department || 'Solarflare Team',
         });
     } else {
         missing.push({
-            name: target.name,
-            job_title: target.job_title,
-            department: target.department,
+            record_id: record.record_id,
+            name: record.name || '',
+            email: record.email || '',
+            job_title: record.job_title || '',
+            department: record.department || 'Solarflare Team',
         });
     }
 }
 
 const report = {
     timestamp: new Date().toISOString(),
-    target_count: targets.length,
+    target_count: requestedRecords.length,
     found_count: found.length,
     missing_count: missing.length,
     found,
