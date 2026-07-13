@@ -50,5 +50,6 @@ See plan §8 and the "Gotchas" section of [CLAUDE.md](CLAUDE.md) / [AGENTS.md](A
 
 ## Changelog
 
+- 2026-07-13 — Employee contact data (Yusuf Can, Mehmet Yilmaz, David Homan) surfaced in the daily employee-reminder email body; Mehmet Yilmaz (Leiter Kundendienst, 0178 2801200, mehmet@juergenhohnen.de) appended as Ansprechpartner to customer reminder emails; LLM prompt told not to invent contact data. Fixed: raw newlines in `PrepareSolarFlareReminders` jsCode (runtime SyntaxError) and `triggerAtHour` string→number in `EmployeeReminderSchedule`. Pushed + verified.
 - 2026-07-13 — Adopted [solarstar-execution-plan.md](solarstar-execution-plan.md) as the single source of truth; restructured progress tracking around its Phase 0–4 roadmap.
 - 2026-07-13 — progress.md created.

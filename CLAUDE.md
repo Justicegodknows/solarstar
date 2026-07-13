@@ -19,6 +19,7 @@ For any n8n workflow work, the detailed operating rules live in existing files. 
 - [AGENTS.md](AGENTS.md) — project overview, environment setup, and the project-specific gotchas (repeated in "Gotchas" below for convenience).
 - [.agents/skills/n8n-architect/SKILL.md](.agents/skills/n8n-architect/SKILL.md) — the full n8nac command reference and authoring rules (sync discipline, schema-first research, AI sub-node wiring, testing, presentation). Also mirrored as a Copilot/VS Code agent at [.github/agents/n8n-architect.agent.md](.github/agents/n8n-architect.agent.md).
 - [.agents/skills/n8n-raw-api-workaround/SKILL.md](.agents/skills/n8n-raw-api-workaround/SKILL.md) — fallback for pushing/patching workflows via the raw n8n REST API when the `n8nac` CLI is broken (npm 403 / EROFS cache errors).
+- [.agents/skills/solarstar-ops-recovery/SKILL.md](.agents/skills/solarstar-ops-recovery/SKILL.md) — ops runbook: n8n login/password reset, unreachable editor UI, git push 403, Postgres access, container health.
 
 ## Commands
 
@@ -65,4 +66,5 @@ External dependencies wired via n8n credentials: HERO GraphQL (`httpHeaderAuth`,
 - **`wait` node + `resume: 'webhook'`** discards the original item's json on resume and replaces it with the incoming webhook payload. Re-attach any fields downstream nodes need (e.g. `is_valid`) after resume — nothing passes through automatically.
 - **Raw workflow PUT** (bypassing `n8nac`): the `settings` object must contain only known keys (`executionOrder`); extras like `binaryMode` cause a `400`. See the raw-API skill.
 - **n8n API key** for MCP/raw-API calls is in `.vscode/settings.json` → `n8nMcp.apiKey`, **not** in `.env`.
+- **n8n Postgres**: connect with `docker exec n8n_postgres psql -U n8n -d n8n` (user/db `n8n`, not `postgres`). Host port 5432 is a different Postgres (rag_backend).
 - **Outlook single-tenant Azure AD**: `microsoftOutlookOAuth2Api` has no tenant field — override `authUrl`/`accessTokenUrl` to the `.../<tenantId>/oauth2/v2.0/...` endpoints, and a human must still complete "Connect my account" in the n8n UI.

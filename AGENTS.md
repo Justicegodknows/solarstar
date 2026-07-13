@@ -82,6 +82,9 @@ There is no `package.json` / npm project here — this repo *is* the n8n-as-code
 ## Environment Setup
 
 1. **Runtime**: `docker compose up -d` starts `n8n` (port 5678) and `n8n_postgres`. Requires `.env` (gitignored) with `POSTGRES_PASSWORD` and `N8N_ENCRYPTION_KEY`. `CLIENT_SECRET_VALUE` and `HERO_API_KEY` also live in `.env` and are read manually when creating/patching credentials (not consumed by docker-compose itself).
+   - **DB access**: `docker exec n8n_postgres psql -U n8n -d n8n` — user and database are both `n8n` (not `postgres`). The host's port 5432 belongs to a *different* Postgres (rag_backend); `n8n_postgres` is not published to the host.
+   - **Remote UI**: this is a headless server. Reach the editor via the server's public IP on :5678 or SSH forward (`ssh -L 5678:localhost:5678 admin@<ip>`).
+   - **Login recovery**: the single n8n owner account and the bcrypt password-reset procedure are documented in repo memory (`/memories/repo/solarstar-n8n.md`).
 2. **n8n API key**: stored in `.vscode/settings.json` under `n8nMcp.apiKey` — this is the working key for MCP/API calls, not anything in `.env`.
 3. **Ollama**: expected on the Docker host at `http://172.17.0.1:11434` (not a compose service). Model used: `mistral`.
 4. **HERO Software API**: GraphQL endpoint `https://login.hero-software.de/api/external/v7/graphql`, header `Authorization: Bearer <HERO_API_KEY>`. n8n credential type `httpHeaderAuth`.
@@ -93,4 +96,5 @@ There is no `package.json` / npm project here — this repo *is* the n8n-as-code
 - **`wait` node + `resume: 'webhook'`**: discards the original item's json on resume and replaces it with the raw incoming webhook call data. Any fields the downstream nodes need (e.g. `is_valid`) must be re-attached after resume — do not assume pass-through.
 - **Azure secrets**: an app registration's "Secret ID" and "Secret Value" are both opaque/GUID-looking strings — always confirm which column was copied into `.env`'s `CLIENT_SECRET_VALUE`.
 - **Raw workflow PUT via API** (bypassing `n8nac`, e.g. when the CLI is unavailable): `settings` must only contain known keys (`executionOrder`); including extras like `binaryMode` causes a `400`.
+- **Ops recovery** (login reset, unreachable UI, git push 403, DB access): follow the runbook in `.agents/skills/solarstar-ops-recovery/SKILL.md` before re-diagnosing.
 - Full incident history, HERO schema notes, and credential IDs are kept in repo memory (`/memories/repo/solarstar-n8n.md`) — consult it before re-diagnosing a previously-solved issue.

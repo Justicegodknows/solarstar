@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : SolarStar Phase 1 - Wartungs-Erinnerungen
-// Nodes   : 19  |  Connections: 19
+// Nodes   : 19  |  Connections: 17
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -10,7 +10,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // TestTrigger                        webhook
 // EmployeeTestTrigger                webhook
 // ScheduleTrigger                    scheduleTrigger
-// EmployeeReminderSchedule            scheduleTrigger
+// EmployeeReminderSchedule           scheduleTrigger
 // CustomerData                       httpRequest                [creds]
 // HeroCompanyPartners                httpRequest                [creds]
 // MapHeroCustomers                   code
@@ -43,13 +43,13 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // EmployeeTestTrigger
 //    → BuildEmployeeTestMessages
 //      → SendEmployeeTestEmail
+// ScheduleTrigger
+//    → CustomerData (↩ loop)
 // EmployeeReminderSchedule
 //    → HeroCompanyPartners
 //      → PrepareSolarFlareReminders
-//      → ReportReminderCoverage
 //        → SendSolarFlareReminder
-// ScheduleTrigger
-//    → CustomerData (↩ loop)
+//      → ReportReminderCoverage
 // </workflow-map>
 
 // =====================================================================
@@ -61,7 +61,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
     name: 'SolarStar Phase 1 - Wartungs-Erinnerungen',
     active: false,
     isArchived: false,
-    settings: { executionOrder: 'v1' },
+    settings: { executionOrder: 'v1', binaryMode: 'separate' },
 })
 export class SolarstarPhase1WartungsErinnerungenWorkflow {
     // =====================================================================
@@ -133,7 +133,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
                 {
                     field: 'days',
                     daysInterval: 1,
-                    triggerAtHour: '13',
+                    triggerAtHour: 13,
                     triggerAtMinute: 0,
                 },
             ],
@@ -228,7 +228,7 @@ return items;`,
         contentType: 'json',
         specifyBody: 'json',
         jsonBody:
-            '={"model": "mistral", "stream": false, "prompt": "Du bist Assistent fuer SolarStar (deutscher Heizungsbetrieb). Schreibe eine kurze, freundliche Wartungserinnerung auf Deutsch. Nutze nur diese Daten und erfinde nichts: Name: {{$json.customer_name}}, Anlagentyp: {{$json.equipment_type}}, Letzte Wartung: {{$json.last_service_date}}. Anforderungen: 1) Beginne mit der direkten Anrede und dem Vornamen der Person. 2) 90-160 Woerter. 3) Keine Preiszusagen, keine nicht vorhandenen Details, keine Erwaehnung von Gutscheinen. 4) Klarer Call-to-Action fuer Terminvereinbarung bei SolarStar.", "options": {"temperature": 0.3}}',
+            '={"model": "mistral", "stream": false, "prompt": "Du bist Assistent fuer SolarStar (deutscher Heizungsbetrieb). Schreibe eine kurze, freundliche Wartungserinnerung auf Deutsch. Nutze nur diese Daten und erfinde nichts: Name: {{$json.customer_name}}, Anlagentyp: {{$json.equipment_type}}, Letzte Wartung: {{$json.last_service_date}}. Anforderungen: 1) Beginne mit der direkten Anrede und dem Vornamen der Person. 2) 90-160 Woerter. 3) Keine Preiszusagen, keine nicht vorhandenen Details, keine Erwaehnung von Gutscheinen. 4) Klarer Call-to-Action fuer Terminvereinbarung bei SolarStar. 5) Erwaehne keine Telefonnummern oder E-Mail-Adressen; die Kontaktdaten des Ansprechpartners werden automatisch ergaenzt.", "options": {"temperature": 0.3}}',
     };
 
     @node({
@@ -304,8 +304,6 @@ return {
     SendGate = {
         mode: 'runOnceForAllItems',
         language: 'javaScript',
-        // Human Review resumes via a webhook, which wraps the approval payload under `.body`
-        // (n8n always nests incoming webhook JSON as { headers, params, query, body }).
         jsCode: 'return $input.all().filter((item) => item.json.body?.is_valid === true);',
     };
 
@@ -326,10 +324,14 @@ return {
     SendEmail = {
         resource: 'message',
         operation: 'send',
-        // Fields come from the Human Review resume webhook body (see Send Gate comment above).
         toRecipients: '={{$json.body.email}}',
         subject: 'Ihre Wartungserinnerung von SolarStar',
-        bodyContent: '={{$json.body.generated_email_text}}',
+        bodyContent: `={{$json.body.generated_email_text}}
+
+Ihr Ansprechpartner fuer die Wartungsplanung:
+Mehmet Yilmaz - Leiter Kundendienst
+Telefon: 0178 2801200
+E-Mail: mehmet@juergenhohnen.de`,
         additionalFields: {
             bodyContentType: 'Text',
         },
@@ -401,17 +403,17 @@ return uniqueRecipients.map((email) => ({
         },
     };
 
-        @node({
-                id: '77f37714-4af0-467f-aa7c-eb1d521fd53d',
-                name: 'Prepare Solar Flare Reminders',
-                type: 'n8n-nodes-base.code',
-                version: 2,
-                position: [740, 680],
-        })
-        PrepareSolarFlareReminders = {
-                mode: 'runOnceForAllItems',
-                language: 'javaScript',
-                jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
+    @node({
+        id: '77f37714-4af0-467f-aa7c-eb1d521fd53d',
+        name: 'Prepare Solar Flare Reminders',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [740, 680],
+    })
+    PrepareSolarFlareReminders = {
+        mode: 'runOnceForAllItems',
+        language: 'javaScript',
+        jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
 const requestedRecords = [
     {
         record_id: 'Employee1',
@@ -446,7 +448,7 @@ const normalize = (value) =>
     String(value ?? '')
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9]+/g, ' ')
         .trim();
 
@@ -486,16 +488,23 @@ const selected = requestedRecords
 return selected.map((record) => {
     const subject = 'Solarflare-Check Erinnerung fuer ' + record.department;
     const responsibilitiesLine = record.responsibilities
-        ? 'Zustaendigkeit: ' + record.responsibilities + '\n'
+        ? 'Zustaendigkeit: ' + record.responsibilities + '\\n'
+        : '';
+    const contactLines = [];
+    if (record.email) contactLines.push('E-Mail: ' + record.email);
+    if (record.phone.length > 0) contactLines.push('Telefon: ' + record.phone.join(' / '));
+    const contactBlock = contactLines.length > 0
+        ? 'Ihre hinterlegten Kontaktdaten:\\n' + contactLines.join('\\n') + '\\n\\n'
         : '';
     const body =
-        'Sehr geehrte/r ' + record.name + ',\n\n' +
-        'dies ist Ihre taegliche Erinnerung, den Solarflare-Status zu pruefen.\n\n' +
-        'Position: ' + record.job_title + '\n' +
-        'Abteilung: ' + record.department + '\n' +
-        responsibilitiesLine + '\n' +
-        'Bitte bestaetigen Sie den Abschluss des Checks im vorgesehenen Teamprozess.\n\n' +
-        'Mit freundlichen Gruessen\nSolarStar Automatisierung';
+        'Sehr geehrte/r ' + record.name + ',\\n\\n' +
+        'dies ist Ihre taegliche Erinnerung, den Solarflare-Status zu pruefen.\\n\\n' +
+        'Position: ' + record.job_title + '\\n' +
+        'Abteilung: ' + record.department + '\\n' +
+        responsibilitiesLine + '\\n' +
+        contactBlock +
+        'Bitte bestaetigen Sie den Abschluss des Checks im vorgesehenen Teamprozess.\\n\\n' +
+        'Mit freundlichen Gruessen\\nSolarStar Automatisierung';
 
     return {
         json: {
@@ -505,19 +514,19 @@ return selected.map((record) => {
         },
     };
 });`,
-        };
+    };
 
-        @node({
-                id: '1b855846-f95c-4267-b133-a8e02110f5d5',
-                name: 'Report Reminder Coverage',
-                type: 'n8n-nodes-base.code',
-                version: 2,
-                position: [740, 820],
-        })
-        ReportReminderCoverage = {
-                mode: 'runOnceForAllItems',
-                language: 'javaScript',
-                jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
+    @node({
+        id: '1b855846-f95c-4267-b133-a8e02110f5d5',
+        name: 'Report Reminder Coverage',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [740, 820],
+    })
+    ReportReminderCoverage = {
+        mode: 'runOnceForAllItems',
+        language: 'javaScript',
+        jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
 const requestedRecords = [
     {
         record_id: 'Employee1',
@@ -552,7 +561,7 @@ const normalize = (value) =>
     String(value ?? '')
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[̀-ͯ]/g, '')
         .replace(/[^a-z0-9]+/g, ' ')
         .trim();
 
@@ -611,32 +620,32 @@ const report = {
 
 console.log('SolarFlareReminderCoverage', JSON.stringify(report));
 return [{ json: report }];`,
-        };
+    };
 
-        @node({
-                id: '58472fa5-f341-4a61-93f8-c73de79474f8',
-                webhookId: 'db4f037d-c3a0-420e-b17b-a8837e8ca258',
-                name: 'Send Solar Flare Reminder',
-                type: 'n8n-nodes-base.microsoftOutlook',
-                version: 2,
-                position: [980, 680],
-                credentials: {
-                        microsoftOutlookOAuth2Api: {
-                                id: 'CWeYIuXpSepKw28k',
-                                name: 'SolarStar Service Mailbox (solarstar2@outlook.com)',
-                        },
-                },
-        })
-        SendSolarFlareReminder = {
-                resource: 'message',
-                operation: 'send',
-                toRecipients: '={{$json.email}}',
-                subject: '={{$json.subject}}',
-                bodyContent: '={{$json.body}}',
-                additionalFields: {
-                        bodyContentType: 'Text',
-                },
-        };
+    @node({
+        id: '58472fa5-f341-4a61-93f8-c73de79474f8',
+        webhookId: 'db4f037d-c3a0-420e-b17b-a8837e8ca258',
+        name: 'Send Solar Flare Reminder',
+        type: 'n8n-nodes-base.microsoftOutlook',
+        version: 2,
+        position: [980, 680],
+        credentials: {
+            microsoftOutlookOAuth2Api: {
+                id: 'CWeYIuXpSepKw28k',
+                name: 'SolarStar Service Mailbox (solarstar2@outlook.com)',
+            },
+        },
+    })
+    SendSolarFlareReminder = {
+        resource: 'message',
+        operation: 'send',
+        toRecipients: '={{$json.email}}',
+        subject: '={{$json.subject}}',
+        bodyContent: '={{$json.body}}',
+        additionalFields: {
+            bodyContentType: 'Text',
+        },
+    };
 
     @node({
         id: '4ed03870-0955-420c-82a5-f2bdfc1efb4c',
