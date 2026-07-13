@@ -2,7 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Before implementing any code, read [progress.md](progress.md).** It is the shared, living record of what is built, what is pending, and what gotchas have been hit. Consult it first, and update it after any change that lands.
+> **Before implementing any code, read [solarstar-execution-plan.md](solarstar-execution-plan.md) and [progress.md](progress.md).**
+> - [solarstar-execution-plan.md](solarstar-execution-plan.md) is the **single source of truth** for the program — problem, architecture, phased roadmap (Phase 0–4), acceptance criteria, definition of done, and risks. All work must trace to a phase there; if a change diverges, update the plan first.
+> - [progress.md](progress.md) is the living execution status against the plan (current phase, done, open items, gotchas). Update it after any change that lands.
 
 ## What this repo is
 

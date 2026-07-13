@@ -419,31 +419,26 @@ const requestedRecords = [
         email: 'yusuf@juergenhohnen.de',
         job_title: 'Assistent der Geschaeftsleitung',
         department: 'Geschaeftsleitung',
+        responsibilities: 'Lohnbuchhaltungen, Zielauswertungen',
+        phone: ['0176 42933616', '02452 92449624'],
     },
     {
         record_id: 'Employee2',
-        job_title: 'Leiter Pelletvertrieb',
-        department: 'Pelletvertrieb Team Hohnen',
-    },
-    {
-        record_id: 'Employee3',
         name: 'Mehmet Yilmaz',
         email: 'mehmet@juergenhohnen.de',
         job_title: 'Leiter Kundendienst',
         department: 'Kundendienst',
+        responsibilities: 'Wartungsplanungen',
+        phone: ['0178 2801200'],
     },
     {
-        record_id: 'Employee4',
-        job_title: 'Leiter Kundendienst',
-        email: 'mehmet@juergenhohnen.de',
-        department: 'Kundendienst',
-    },
-    {
-        record_id: 'Employee5',
+        record_id: 'Employee3',
         name: 'David Homan',
         email: 'david@juergenhohnen.de',
         job_title: 'Leiter Pelletvertrieb Team Hohnen',
         department: 'Pelletvertrieb Team Hohnen',
+        responsibilities: '',
+        phone: ['01511 4184734'],
     },
 ];
 
@@ -481,17 +476,24 @@ const selected = requestedRecords
             email: partner?.email || record.email || '',
             job_title: record.job_title || partner?.title || '',
             department: record.department || 'Solarflare Team',
+            responsibilities: record.responsibilities || '',
+            phone: Array.isArray(record.phone) ? record.phone : (record.phone ? [record.phone] : []),
+            in_hero: Boolean(partner),
         };
     })
     .filter((record) => record.email);
 
 return selected.map((record) => {
     const subject = 'Solarflare-Check Erinnerung fuer ' + record.department;
+    const responsibilitiesLine = record.responsibilities
+        ? 'Zustaendigkeit: ' + record.responsibilities + '\n'
+        : '';
     const body =
         'Sehr geehrte/r ' + record.name + ',\n\n' +
         'dies ist Ihre taegliche Erinnerung, den Solarflare-Status zu pruefen.\n\n' +
         'Position: ' + record.job_title + '\n' +
-        'Abteilung: ' + record.department + '\n\n' +
+        'Abteilung: ' + record.department + '\n' +
+        responsibilitiesLine + '\n' +
         'Bitte bestaetigen Sie den Abschluss des Checks im vorgesehenen Teamprozess.\n\n' +
         'Mit freundlichen Gruessen\nSolarStar Automatisierung';
 
@@ -523,31 +525,26 @@ const requestedRecords = [
         email: 'yusuf@juergenhohnen.de',
         job_title: 'Assistent der Geschaeftsleitung',
         department: 'Geschaeftsleitung',
+        responsibilities: 'Lohnbuchhaltungen, Zielauswertungen',
+        phone: ['0176 42933616', '02452 92449624'],
     },
     {
         record_id: 'Employee2',
-        job_title: 'Leiter Pelletvertrieb',
-        department: 'Pelletvertrieb Team Hohnen',
-    },
-    {
-        record_id: 'Employee3',
         name: 'Mehmet Yilmaz',
         email: 'mehmet@juergenhohnen.de',
         job_title: 'Leiter Kundendienst',
         department: 'Kundendienst',
+        responsibilities: 'Wartungsplanungen',
+        phone: ['0178 2801200'],
     },
     {
-        record_id: 'Employee4',
-        job_title: 'Leiter Kundendienst',
-        email: 'mehmet@juergenhohnen.de',
-        department: 'Kundendienst',
-    },
-    {
-        record_id: 'Employee5',
+        record_id: 'Employee3',
         name: 'David Homan',
         email: 'david@juergenhohnen.de',
         job_title: 'Leiter Pelletvertrieb Team Hohnen',
         department: 'Pelletvertrieb Team Hohnen',
+        responsibilities: '',
+        phone: ['01511 4184734'],
     },
 ];
 
@@ -587,6 +584,8 @@ for (const record of requestedRecords) {
             email: partner.email || record.email || '',
             job_title: record.job_title || partner.title || '',
             department: record.department || 'Solarflare Team',
+            responsibilities: record.responsibilities || '',
+            phone: Array.isArray(record.phone) ? record.phone : (record.phone ? [record.phone] : []),
         });
     } else {
         missing.push({
@@ -595,6 +594,8 @@ for (const record of requestedRecords) {
             email: record.email || '',
             job_title: record.job_title || '',
             department: record.department || 'Solarflare Team',
+            responsibilities: record.responsibilities || '',
+            phone: Array.isArray(record.phone) ? record.phone : (record.phone ? [record.phone] : []),
         });
     }
 }

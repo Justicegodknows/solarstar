@@ -1,32 +1,54 @@
 # progress.md
 
-Living log of the SolarStar workflow project. **Every agent must read this file before implementing any code**, and update it after any change that lands (new node, credential, gotcha discovered, flow added). Keep it current — it is the shared memory across sessions.
+Living execution status for the SolarStar program. **Every agent must read this file before implementing any code**, and update it after any change that lands (new node, credential, gotcha, phase progress).
+
+**Single source of truth:** [solarstar-execution-plan.md](solarstar-execution-plan.md) defines the program — problem statement, target architecture, technology, the phased roadmap (Phase 0–4), acceptance criteria (AC), definition of done (DoD), and risks. This file does **not** redefine scope; it tracks live progress *against* the plan. If work and plan disagree, follow the plan or update the plan first — do not let this file drift into a second source of truth.
 
 Last updated: 2026-07-13
 
-## Current status
+## Current position
 
-Phase 1 workflow (`TyzTNzhz9QuLKNiH`, [workflows/solarflar/solarstar-phase1-reminder.workflow.ts](workflows/solarflar/solarstar-phase1-reminder.workflow.ts)) is built out to 19 nodes across four trigger-rooted flows. `active: false` — not yet running on schedule. There are uncommitted edits in the working tree to the workflow file.
+**Phase 0 — Stabilise the foundation** (see plan §5). The Phase 1 workflow (`TyzTNzhz9QuLKNiH`, [workflows/solarflar/solarstar-phase1-reminder.workflow.ts](workflows/solarflar/solarstar-phase1-reminder.workflow.ts)) is built out to 19 nodes across four trigger-rooted flows but is `active: false` and not yet proven end-to-end. Uncommitted edits remain in the working tree.
 
-## Completed
+## Phase tracker
 
-- Docker Compose runtime: n8n (`:5678`) + Postgres, wired to `.env` secrets.
+| Phase | Scope (see plan §5) | Status |
+|---|---|---|
+| **0 — Stabilise foundation** | Commit edits, confirm Outlook token, prove Phase 1 path with real `runData` | 🔵 In progress |
+| **1 — Maintenance reminders in production** | Live replacement for Mehmet's ~100/mo BCC process; schedule, safety note, chase list | ⚪ Not started |
+| **2 — Pellet campaigns & voucher reminders** | Personalised campaigns >500 recipients, voucher flags, batch approval | ⚪ Not started |
+| **3 — Payroll, bonus & vacation** | HERO hours → bonus rules → itemised payslips + accountant hand-off | ⚪ Not started |
+| **4 — Self-service & extra channels** | Self-booking, WhatsApp, missed-call assistant (optional / to confirm) | ⚪ Not started |
+
+## Completed (baseline — plan §2)
+
+- Docker Compose runtime: n8n (`:5678`) + Postgres 15, wired to `.env` secrets; timezone `Europe/Berlin`.
 - n8n-as-code workspace configured (`solarflar` environment, `workflowsPath: workflows/solarflar`).
-- Main reminder flow: HERO customer fetch → `MapHeroCustomers` → Ollama email generation (`GenerateEmail`) → `AttachCustomerFields` → `Validate` → `HumanReview` (wait) → `SendGate` → Outlook `SendEmail`, with `InvalidForManualFollowUp` reject branch.
+- Main reminder flow: HERO customer fetch → `MapHeroCustomers` → Ollama (`mistral`) draft via `httpRequest` → `AttachCustomerFields` → `Validate` → `HumanReview` (wait) → `SendGate` → Outlook `SendEmail`; `InvalidForManualFollowUp` reject branch.
 - Employee test flow: `EmployeeTestTrigger` → `BuildEmployeeTestMessages` → `SendEmployeeTestEmail`.
-- Daily employee reminder flow with coverage reporting: `EmployeeReminderSchedule` → `HeroCompanyPartners` → `PrepareSolarFlareReminders` / `ReportReminderCoverage` → `SendSolarFlareReminder` (latest commit `0a2a239`).
+- Daily employee-reminder flow with coverage reporting: `EmployeeReminderSchedule` → `HeroCompanyPartners` → `PrepareSolarFlareReminders` / `ReportReminderCoverage` → `SendSolarFlareReminder` (commit `0a2a239`).
 - Credentials wired: HERO GraphQL (`httpHeaderAuth`), Outlook (`microsoftOutlookOAuth2Api`).
 
-## In progress / pending
+## Phase 0 open items (plan §5, AC/DoD)
 
-- Commit the uncommitted workflow edits and reconcile TS source with the live instance.
-- Activate the schedule (`active: true`) once the human-approval path and Outlook token are confirmed working end-to-end.
-- Verify the Outlook credential's "Connect my account" step is completed (config alone does not establish a token).
+- [ ] Commit uncommitted workflow edits; reconcile TS source with the live instance (`n8nac verify` passes).
+- [ ] Confirm `.env` and complete Outlook "Connect my account" — deliver a real test mail.
+- [ ] Validate HERO Bearer credential end-to-end.
+- [ ] Run the human-approval path with a test payload and confirm via real `runData` (not just a "success" flag).
+- [ ] Document a rollback note (how to set `active: false`).
+- [ ] Keep `active: false` until the path is proven.
+
+## Open scope questions (plan §9)
+
+- WhatsApp as a second reminder channel? (Phase 4 — to confirm with client.)
+- Route-optimisation depth: simple regional grouping vs. a routing API? (Phase 4.)
+- Verify the HERO GraphQL schema exposes the fields each phase needs *before* building — never guess a type/version.
 
 ## Known gotchas
 
-See the "Gotchas" section of [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md) — `=` expression prefix, `wait`-node payload replacement on resume, raw-PUT `settings` trap, API key location, single-tenant Outlook OAuth. Add any newly-discovered gotcha there and note it here.
+See plan §8 and the "Gotchas" section of [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md): `=` expression prefix silent failure, `wait`-node payload replacement on resume, raw-PUT `settings` trap, API-key location, single-tenant Outlook OAuth. Add any newly-discovered gotcha there and note it here.
 
 ## Changelog
 
+- 2026-07-13 — Adopted [solarstar-execution-plan.md](solarstar-execution-plan.md) as the single source of truth; restructured progress tracking around its Phase 0–4 roadmap.
 - 2026-07-13 — progress.md created.

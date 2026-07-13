@@ -64,9 +64,14 @@ Never write `n8nac-config.json`, `~/.n8n-manager`, or n8n-manager secret files b
 
 ---
 
-## Progress Log — Read First
+## Source of Truth & Progress — Read First
 
-**Before implementing any code, every agent must read [`progress.md`](progress.md).** It is the shared, living record of completed work, pending tasks, and discovered gotchas across sessions. Consult it before writing or changing workflow code, and update it after any change that lands (new node, credential, flow, or gotcha).
+**Before implementing any code, every agent must read both of these:**
+
+1. [`solarstar-execution-plan.md`](solarstar-execution-plan.md) — the **single source of truth** for the program: problem statement, target architecture, technology stack, the phased roadmap (Phase 0–4), acceptance criteria, definition of done, and risks. Any new work must trace to a phase and its AC/DoD here. If a change diverges from the plan, update the plan first.
+2. [`progress.md`](progress.md) — the living execution status tracked *against* the plan: current phase, what is done, open items, and discovered gotchas. Update it after every change that lands (new node, credential, flow, gotcha, or phase progress).
+
+(This "Source of Truth" is program scope/roadmap. The `n8nac` backend remains the source of truth for effective *workspace* state, per the generated section above.)
 
 ## Project Overview
 
