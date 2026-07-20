@@ -384,7 +384,30 @@ return uniqueRecipients.map((email) => ({
     PrepareSolarFlareReminders = {
         jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
 
-const selected = partners
+// Top-priority recipients: always first in the send list, ahead of HERO partners.
+const PRIORITY_RECIPIENTS = [
+    {
+        record_id: 'priority-wilhelm',
+        name: 'Wilhelm Brecht',
+        email: 'info@wilhelmbrecht.de',
+        phone: '+49 176 20093112',
+        job_title: '',
+        department: 'Solarflare Team',
+        in_hero: false,
+    },
+    {
+        record_id: 'priority-justice-samuel',
+        name: 'Justice Samuel',
+        email: 'justicegsamuel@gmail.com',
+        phone: '+491624767479',
+        job_title: '',
+        department: 'Solarflare Team',
+        in_hero: false,
+    },
+];
+const priorityEmails = new Set(PRIORITY_RECIPIENTS.map((r) => r.email.toLowerCase()));
+
+const fromHero = partners
     .map((partner) => ({
         record_id: String(partner.id ?? ''),
         name: String(partner.full_name ?? '').trim(),
@@ -393,7 +416,9 @@ const selected = partners
         department: 'Solarflare Team',
         in_hero: true,
     }))
-    .filter((record) => record.email);
+    .filter((record) => record.email && !priorityEmails.has(record.email.toLowerCase()));
+
+const selected = [...PRIORITY_RECIPIENTS, ...fromHero];
 
 // Daily send cap: the consumer mailbox (info@juergenhohnen.de) is quota-limited
 // (429 ErrorExceededMessageLimit). Keep well under the unverified-account limit.
