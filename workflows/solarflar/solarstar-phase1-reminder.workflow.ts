@@ -433,13 +433,41 @@ if (selected.length > capped.length) {
 }
 
 return capped.map((record) => {
-    const subject = 'Testmail';
-    const positionLine = record.job_title ? 'Position: ' + record.job_title + '\\n' : '';
+    // Employee reminder uses the customer-facing template format so staff
+    // preview exactly what customers will receive.
+    const SUPPORT_PHONE = '0178 2801200';
+
+    const firstName = record.name.split(/\\s+/)[0] || record.name;
+
+    const dueDate = new Date();
+    dueDate.setMonth(dueDate.getMonth() + 3);
+    const dueDateFormatted = dueDate.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: 'Europe/Berlin',
+    });
+
+    // Optional kWp line: only rendered when system size data is available.
+    const systemSizeKwp = record.system_size_kwp ?? null;
+    const systemSizeLine = systemSizeKwp
+        ? 'Ihre ' + systemSizeKwp + '-kWp-Anlage profitiert besonders von einer regelmaessigen Kontrolle.\\n\\n'
+        : '';
+
+    const subject = 'Erinnerung: Wartung Ihrer Solaranlage bis ' + dueDateFormatted;
     const body =
-        'Sehr geehrte/r ' + record.name + ',\\n\\n' +
-        'diese E-Mail dient dazu, unser Automatisierungssystem zu testen.\\n\\n' +
-        positionLine +
-        'Abteilung: ' + record.department + '\\n\\n' +
+        'Hallo ' + firstName + ',\\n\\n' +
+        'Ihre Solaranlage braucht wieder Aufmerksamkeit.\\n\\n' +
+        'Spaetestens in 3 Monaten (bis ' + dueDateFormatted + ') ist die regulaere Wartung faellig - ' +
+        'das sichert die optimale Leistung und schliesst Ausfallrisiken aus.\\n\\n' +
+        systemSizeLine +
+        'Was wir machen:\\n' +
+        '-> Kontrolle aller Komponenten\\n' +
+        '-> Ertragsoptimierung\\n' +
+        '-> Schnelle Behebung von Maengeln\\n\\n' +
+        '---\\n' +
+        'Termin vereinbaren:\\n' +
+        'Anruf: ' + SUPPORT_PHONE + '\\n\\n' +
         'Mit freundlichen Gruessen\\nSolarStar Automatisierung';
 
     return {
