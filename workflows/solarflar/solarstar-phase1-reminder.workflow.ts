@@ -59,9 +59,15 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 @workflow({
     id: 'TyzTNzhz9QuLKNiH',
     name: 'SolarStar Phase 1 - Wartungs-Erinnerungen',
-    active: false,
+    active: true,
     isArchived: false,
-    settings: { executionOrder: 'v1', binaryMode: 'separate' },
+    settings: {
+        executionOrder: 'v1',
+        binaryMode: 'separate',
+        availableInMCP: true,
+        timeSavedMode: 'fixed',
+        callerPolicy: 'workflowsFromSameOwner',
+    },
 })
 export class SolarstarPhase1WartungsErinnerungenWorkflow {
     // =====================================================================
@@ -74,15 +80,12 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         name: 'Test Trigger',
         type: 'n8n-nodes-base.webhook',
         version: 2.1,
-        position: [220, 160],
+        position: [224, 160],
     })
     TestTrigger = {
-        responseBinaryPropertyName: 'data',
         httpMethod: 'POST',
         path: 'solarstar-phase1-test',
-        authentication: 'none',
-        responseMode: 'onReceived',
-        responseCode: 200,
+        options: {},
     };
 
     @node({
@@ -91,15 +94,12 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         name: 'Employee Test Trigger',
         type: 'n8n-nodes-base.webhook',
         version: 2.1,
-        position: [220, 500],
+        position: [224, 512],
     })
     EmployeeTestTrigger = {
-        responseBinaryPropertyName: 'data',
         httpMethod: 'POST',
         path: 'solarstar-employee-test',
-        authentication: 'none',
-        responseMode: 'onReceived',
-        responseCode: 200,
+        options: {},
     };
 
     @node({
@@ -107,14 +107,13 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         name: 'Schedule Trigger',
         type: 'n8n-nodes-base.scheduleTrigger',
         version: 1.3,
-        position: [220, 320],
+        position: [224, 320],
     })
     ScheduleTrigger = {
         rule: {
             interval: [
                 {
-                    field: 'minutes',
-                    minutesInterval: 1,
+                    field: 'months',
                 },
             ],
         },
@@ -125,18 +124,11 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         name: 'Employee Reminder Schedule',
         type: 'n8n-nodes-base.scheduleTrigger',
         version: 1.3,
-        position: [220, 680],
+        position: [224, 688],
     })
     EmployeeReminderSchedule = {
         rule: {
-            interval: [
-                {
-                    field: 'days',
-                    daysInterval: 1,
-                    triggerAtHour: 13,
-                    triggerAtMinute: 0,
-                },
-            ],
+            interval: [{}],
         },
     };
 
@@ -145,7 +137,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         name: 'Customer Data',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [460, 260],
+        position: [464, 272],
         credentials: { httpHeaderAuth: { id: 'bsL1r7l7hguXNpjs', name: 'HERO API (read-only)' } },
     })
     CustomerData = {
@@ -154,10 +146,10 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         authentication: 'genericCredentialType',
         genericAuthType: 'httpHeaderAuth',
         sendBody: true,
-        contentType: 'json',
         specifyBody: 'json',
         jsonBody:
             '={"query": "query GetDueMaintenance($start: DateTime, $end: DateTime) { field_service_jobs(start: $start, end: $end, first: 200) { id type start title customer { id full_name email } } }", "variables": {"start": "{{$now.minus({days:380}).toISO()}}", "end": "{{$now.minus({days:350}).toISO()}}"}}',
+        options: {},
     };
 
     @node({
@@ -165,7 +157,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         name: 'HERO Company Partners',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [480, 680],
+        position: [480, 688],
         credentials: { httpHeaderAuth: { id: 'bsL1r7l7hguXNpjs', name: 'HERO API (read-only)' } },
     })
     HeroCompanyPartners = {
@@ -174,10 +166,10 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         authentication: 'genericCredentialType',
         genericAuthType: 'httpHeaderAuth',
         sendBody: true,
-        contentType: 'json',
         specifyBody: 'json',
         jsonBody:
             '={"query":"query CompanyPartnersForSolarFlareReminder { company { partners { id full_name email title role account_type status } } }"}',
+        options: {},
     };
 
     @node({
@@ -185,11 +177,9 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         name: 'Map HERO Customers',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [580, 260],
+        position: [592, 272],
     })
     MapHeroCustomers = {
-        mode: 'runOnceForAllItems',
-        language: 'javaScript',
         jsCode: `const jobs = $input.first().json.data?.field_service_jobs ?? [];
 const seenEmails = new Set();
 const items = [];
@@ -218,17 +208,16 @@ return items;`,
         name: 'Generate Email',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [700, 260],
+        position: [704, 272],
     })
     GenerateEmail = {
         method: 'POST',
         url: 'http://172.17.0.1:11434/api/generate',
-        authentication: 'none',
         sendBody: true,
-        contentType: 'json',
         specifyBody: 'json',
         jsonBody:
             '={"model": "mistral", "stream": false, "prompt": "Du bist Assistent fuer SolarStar (deutscher Heizungsbetrieb). Schreibe eine kurze, freundliche Wartungserinnerung auf Deutsch. Nutze nur diese Daten und erfinde nichts: Name: {{$json.customer_name}}, Anlagentyp: {{$json.equipment_type}}, Letzte Wartung: {{$json.last_service_date}}. Anforderungen: 1) Beginne mit der direkten Anrede und dem Vornamen der Person. 2) 90-160 Woerter. 3) Keine Preiszusagen, keine nicht vorhandenen Details, keine Erwaehnung von Gutscheinen. 4) Klarer Call-to-Action fuer Terminvereinbarung bei SolarStar. 5) Erwaehne keine Telefonnummern oder E-Mail-Adressen; die Kontaktdaten des Ansprechpartners werden automatisch ergaenzt.", "options": {"temperature": 0.3}}',
+        options: {},
     };
 
     @node({
@@ -236,7 +225,7 @@ return items;`,
         name: 'Attach Customer Fields',
         type: 'n8n-nodes-base.merge',
         version: 3.2,
-        position: [940, 260],
+        position: [944, 272],
     })
     AttachCustomerFields = {
         mode: 'combine',
@@ -249,11 +238,10 @@ return items;`,
         name: 'Validate',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1160, 260],
+        position: [1168, 272],
     })
     Validate = {
         mode: 'runOnceForEachItem',
-        language: 'javaScript',
         jsCode: `const item = $input.item.json;
 const generatedText = String(item.response ?? '').trim();
 const firstName = String(item.customer_name ?? '').trim().split(/\\s+/)[0] ?? '';
@@ -283,15 +271,12 @@ return {
         name: 'Human Review',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [1380, 260],
+        position: [1392, 272],
     })
     HumanReview = {
         resume: 'webhook',
-        incomingAuthentication: 'none',
-        dateTime: '={{$now.plus({hours: 1}).toISO()}}',
-        formTitle: 'Freigabe Kundenmail',
-        responseBinaryPropertyName: 'data',
         httpMethod: 'POST',
+        options: {},
     };
 
     @node({
@@ -299,11 +284,9 @@ return {
         name: 'Send Gate',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1600, 260],
+        position: [1600, 272],
     })
     SendGate = {
-        mode: 'runOnceForAllItems',
-        language: 'javaScript',
         jsCode: 'return $input.all().filter((item) => item.json.body?.is_valid === true);',
     };
 
@@ -313,17 +296,12 @@ return {
         name: 'Send Email',
         type: 'n8n-nodes-base.microsoftOutlook',
         version: 2,
-        position: [1820, 260],
+        position: [1824, 272],
         credentials: {
-            microsoftOutlookOAuth2Api: {
-                id: 'CWeYIuXpSepKw28k',
-                name: 'SolarStar Service Mailbox (solarstar2@outlook.com)',
-            },
+            microsoftOutlookOAuth2Api: { id: 'f1Xx191p4oB5LCsn', name: 'Juergen Hohnen GmbH (info@juergenhohnen.de)' },
         },
     })
     SendEmail = {
-        resource: 'message',
-        operation: 'send',
         toRecipients: '={{$json.body.email}}',
         subject: 'Ihre Wartungserinnerung von SolarStar',
         bodyContent: `={{$json.body.generated_email_text}}
@@ -342,11 +320,9 @@ E-Mail: mehmet@juergenhohnen.de`,
         name: 'Build Employee Test Messages',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [480, 500],
+        position: [480, 512],
     })
     BuildEmployeeTestMessages = {
-        mode: 'runOnceForAllItems',
-        language: 'javaScript',
         jsCode: `const payload = $input.first().json.body ?? {};
 const defaultRecipients = [
   'juergen@juergenhohnen.de',
@@ -384,17 +360,12 @@ return uniqueRecipients.map((email) => ({
         name: 'Send Employee Test Email',
         type: 'n8n-nodes-base.microsoftOutlook',
         version: 2,
-        position: [760, 500],
+        position: [768, 512],
         credentials: {
-            microsoftOutlookOAuth2Api: {
-                id: 'CWeYIuXpSepKw28k',
-                name: 'SolarStar Service Mailbox (solarstar2@outlook.com)',
-            },
+            microsoftOutlookOAuth2Api: { id: 'f1Xx191p4oB5LCsn', name: 'Juergen Hohnen GmbH (info@juergenhohnen.de)' },
         },
     })
     SendEmployeeTestEmail = {
-        resource: 'message',
-        operation: 'send',
         toRecipients: '={{$json.email}}',
         subject: '={{$json.subject}}',
         bodyContent: '={{$json.body_html}}',
@@ -408,102 +379,42 @@ return uniqueRecipients.map((email) => ({
         name: 'Prepare Solar Flare Reminders',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [740, 680],
+        position: [752, 688],
     })
     PrepareSolarFlareReminders = {
-        mode: 'runOnceForAllItems',
-        language: 'javaScript',
         jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
-const requestedRecords = [
-    {
-        record_id: 'Employee1',
-        name: 'Yusuf Can',
-        email: 'yusuf@juergenhohnen.de',
-        job_title: 'Assistent der Geschaeftsleitung',
-        department: 'Geschaeftsleitung',
-        responsibilities: 'Lohnbuchhaltungen, Zielauswertungen',
-        phone: ['0176 42933616', '02452 92449624'],
-    },
-    {
-        record_id: 'Employee2',
-        name: 'Mehmet Yilmaz',
-        email: 'mehmet@juergenhohnen.de',
-        job_title: 'Leiter Kundendienst',
-        department: 'Kundendienst',
-        responsibilities: 'Wartungsplanungen',
-        phone: ['0178 2801200'],
-    },
-    {
-        record_id: 'Employee3',
-        name: 'David Homan',
-        email: 'david@juergenhohnen.de',
-        job_title: 'Leiter Pelletvertrieb Team Hohnen',
-        department: 'Pelletvertrieb Team Hohnen',
-        responsibilities: '',
-        phone: ['01511 4184734'],
-    },
-];
 
-const normalize = (value) =>
-    String(value ?? '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-
-const findPartner = (record) => {
-    const expectedName = normalize(record.name);
-    const expectedEmail = normalize(record.email);
-    const expectedTitle = normalize(record.job_title);
-
-    return partners.find((partner) => {
-        const fullName = normalize(partner.full_name);
-        const email = normalize(partner.email);
-        const title = normalize(partner.title);
-
-        if (expectedEmail && email && expectedEmail === email) return true;
-        if (expectedName && fullName && expectedName === fullName) return true;
-        if (expectedTitle && title && title.includes(expectedTitle)) return true;
-        return false;
-    });
-};
-
-const selected = requestedRecords
-    .map((record) => {
-        const partner = findPartner(record);
-        return {
-            record_id: record.record_id,
-            name: partner?.full_name || record.name || '',
-            email: partner?.email || record.email || '',
-            job_title: record.job_title || partner?.title || '',
-            department: record.department || 'Solarflare Team',
-            responsibilities: record.responsibilities || '',
-            phone: Array.isArray(record.phone) ? record.phone : (record.phone ? [record.phone] : []),
-            in_hero: Boolean(partner),
-        };
-    })
+const selected = partners
+    .map((partner) => ({
+        record_id: String(partner.id ?? ''),
+        name: String(partner.full_name ?? '').trim(),
+        email: String(partner.email ?? '').trim(),
+        job_title: String(partner.title ?? '').trim(),
+        department: 'Solarflare Team',
+        in_hero: true,
+    }))
     .filter((record) => record.email);
 
-return selected.map((record) => {
-    const subject = 'Solarflare-Check Erinnerung fuer ' + record.department;
-    const responsibilitiesLine = record.responsibilities
-        ? 'Zustaendigkeit: ' + record.responsibilities + '\\n'
-        : '';
-    const contactLines = [];
-    if (record.email) contactLines.push('E-Mail: ' + record.email);
-    if (record.phone.length > 0) contactLines.push('Telefon: ' + record.phone.join(' / '));
-    const contactBlock = contactLines.length > 0
-        ? 'Ihre hinterlegten Kontaktdaten:\\n' + contactLines.join('\\n') + '\\n\\n'
-        : '';
+// Daily send cap: the consumer mailbox (info@juergenhohnen.de) is quota-limited
+// (429 ErrorExceededMessageLimit). Keep well under the unverified-account limit.
+const MAX_DAILY_RECIPIENTS = 10;
+const capped = selected.slice(0, MAX_DAILY_RECIPIENTS);
+if (selected.length > capped.length) {
+    console.log('SolarFlareReminderCap', JSON.stringify({
+        total_eligible: selected.length,
+        sent_cap: MAX_DAILY_RECIPIENTS,
+        skipped: selected.length - capped.length,
+    }));
+}
+
+return capped.map((record) => {
+    const subject = 'Testmail';
+    const positionLine = record.job_title ? 'Position: ' + record.job_title + '\\n' : '';
     const body =
         'Sehr geehrte/r ' + record.name + ',\\n\\n' +
-        'dies ist Ihre taegliche Erinnerung, den Solarflare-Status zu pruefen.\\n\\n' +
-        'Position: ' + record.job_title + '\\n' +
-        'Abteilung: ' + record.department + '\\n' +
-        responsibilitiesLine + '\\n' +
-        contactBlock +
-        'Bitte bestaetigen Sie den Abschluss des Checks im vorgesehenen Teamprozess.\\n\\n' +
+        'diese E-Mail dient dazu, unser Automatisierungssystem zu testen.\\n\\n' +
+        positionLine +
+        'Abteilung: ' + record.department + '\\n\\n' +
         'Mit freundlichen Gruessen\\nSolarStar Automatisierung';
 
     return {
@@ -521,97 +432,31 @@ return selected.map((record) => {
         name: 'Report Reminder Coverage',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [740, 820],
+        position: [752, 832],
     })
     ReportReminderCoverage = {
-        mode: 'runOnceForAllItems',
-        language: 'javaScript',
         jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
-const requestedRecords = [
-    {
-        record_id: 'Employee1',
-        name: 'Yusuf Can',
-        email: 'yusuf@juergenhohnen.de',
-        job_title: 'Assistent der Geschaeftsleitung',
-        department: 'Geschaeftsleitung',
-        responsibilities: 'Lohnbuchhaltungen, Zielauswertungen',
-        phone: ['0176 42933616', '02452 92449624'],
-    },
-    {
-        record_id: 'Employee2',
-        name: 'Mehmet Yilmaz',
-        email: 'mehmet@juergenhohnen.de',
-        job_title: 'Leiter Kundendienst',
-        department: 'Kundendienst',
-        responsibilities: 'Wartungsplanungen',
-        phone: ['0178 2801200'],
-    },
-    {
-        record_id: 'Employee3',
-        name: 'David Homan',
-        email: 'david@juergenhohnen.de',
-        job_title: 'Leiter Pelletvertrieb Team Hohnen',
-        department: 'Pelletvertrieb Team Hohnen',
-        responsibilities: '',
-        phone: ['01511 4184734'],
-    },
-];
-
-const normalize = (value) =>
-    String(value ?? '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-
-const findPartner = (record) => {
-    const expectedName = normalize(record.name);
-    const expectedEmail = normalize(record.email);
-    const expectedTitle = normalize(record.job_title);
-
-    return partners.find((partner) => {
-        const fullName = normalize(partner.full_name);
-        const email = normalize(partner.email);
-        const title = normalize(partner.title);
-
-        if (expectedEmail && email && expectedEmail === email) return true;
-        if (expectedName && fullName && expectedName === fullName) return true;
-        if (expectedTitle && title && title.includes(expectedTitle)) return true;
-        return false;
-    });
-};
 
 const found = [];
 const missing = [];
-for (const record of requestedRecords) {
-    const partner = findPartner(record);
-    if (partner) {
-        found.push({
-            record_id: record.record_id,
-            name: partner.full_name || record.name || '',
-            email: partner.email || record.email || '',
-            job_title: record.job_title || partner.title || '',
-            department: record.department || 'Solarflare Team',
-            responsibilities: record.responsibilities || '',
-            phone: Array.isArray(record.phone) ? record.phone : (record.phone ? [record.phone] : []),
-        });
+for (const partner of partners) {
+    const record = {
+        record_id: String(partner.id ?? ''),
+        name: String(partner.full_name ?? '').trim(),
+        email: String(partner.email ?? '').trim(),
+        job_title: String(partner.title ?? '').trim(),
+        department: 'Solarflare Team',
+    };
+    if (record.email) {
+        found.push(record);
     } else {
-        missing.push({
-            record_id: record.record_id,
-            name: record.name || '',
-            email: record.email || '',
-            job_title: record.job_title || '',
-            department: record.department || 'Solarflare Team',
-            responsibilities: record.responsibilities || '',
-            phone: Array.isArray(record.phone) ? record.phone : (record.phone ? [record.phone] : []),
-        });
+        missing.push(record);
     }
 }
 
 const report = {
     timestamp: new Date().toISOString(),
-    target_count: requestedRecords.length,
+    target_count: partners.length,
     found_count: found.length,
     missing_count: missing.length,
     found,
@@ -628,17 +473,12 @@ return [{ json: report }];`,
         name: 'Send Solar Flare Reminder',
         type: 'n8n-nodes-base.microsoftOutlook',
         version: 2,
-        position: [980, 680],
+        position: [992, 688],
         credentials: {
-            microsoftOutlookOAuth2Api: {
-                id: 'CWeYIuXpSepKw28k',
-                name: 'SolarStar Service Mailbox (solarstar2@outlook.com)',
-            },
+            microsoftOutlookOAuth2Api: { id: 'f1Xx191p4oB5LCsn', name: 'Juergen Hohnen GmbH (info@juergenhohnen.de)' },
         },
     })
     SendSolarFlareReminder = {
-        resource: 'message',
-        operation: 'send',
         toRecipients: '={{$json.email}}',
         subject: '={{$json.subject}}',
         bodyContent: '={{$json.body}}',
@@ -652,7 +492,7 @@ return [{ json: report }];`,
         name: 'Invalid For Manual Follow-up',
         type: 'n8n-nodes-base.noOp',
         version: 1,
-        position: [1380, 500],
+        position: [1392, 512],
     })
     InvalidForManualFollowUp = {};
 
