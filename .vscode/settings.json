@@ -10,6 +10,17 @@
             "headers": {
                 "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYzIwNjJlMC05Yjg1LTQ0ODMtYjEwZi05ZjJhYzQ4Y2IxMmYiLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6ImE1ZGEwZTExLWU0MzMtNGI4NS04MjE1LTQ3NGJjYmZiZTJhOCIsImlhdCI6MTc4MjM3Mjg0N30.en3korqbAI5QWoJFuhAuT0Nt_8VZst-jgKpccWnSR0I"
             }
+        },
+        "RapidAPI Hub - Fresh LinkedIn Profile Data": {
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://mcp.rapidapi.com",
+                "--header",
+                "x-api-host: fresh-linkedin-profile-data.p.rapidapi.com",
+                "--header",
+                "x-api-key: 1c756ac461msh57c09ab89e5b6fdp10023djsn55754c83349b"
+            ]
         }
     }
 }
