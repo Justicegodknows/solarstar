@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : SolarStar Phase 1 - Wartungs-Erinnerungen
-// Nodes   : 19  |  Connections: 17
+// Nodes   : 25  |  Connections: 24
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -10,7 +10,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // TestTrigger                        webhook
 // EmployeeTestTrigger                webhook
 // ScheduleTrigger                    scheduleTrigger
-// EmployeeReminderSchedule           scheduleTrigger
+// EmployeeReminderSchedule           scheduleTrigger            [alwaysOutput] [executeOnce]
 // CustomerData                       httpRequest                [creds]
 // HeroCompanyPartners                httpRequest                [creds]
 // MapHeroCustomers                   code
@@ -18,13 +18,19 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // AttachCustomerFields               merge
 // Validate                           code
 // HumanReview                        wait
+// ComposeHtmlEmail                   code
 // SendGate                           code
-// SendEmail                          microsoftOutlook           [creds]
+// SendEmail                          microsoftOutlook           [onError→out(1)] [creds]
+// HandleSendEmailError               code
 // BuildEmployeeTestMessages          code
-// SendEmployeeTestEmail              microsoftOutlook           [creds]
+// SendEmployeeTestEmail              microsoftOutlook           [onError→out(1)] [creds]
+// HandleEmployeeTestSendError        code
 // PrepareSolarFlareReminders         code
 // ReportReminderCoverage             code
-// SendSolarFlareReminder             microsoftOutlook           [creds]
+// PaceSolarFlareBatches              splitInBatches
+// SendSolarFlareReminder             microsoftOutlook           [onError→out(1)] [creds] [alwaysOutput] [retry]
+// ThrottleSolarFlareSend             wait
+// HandleSolarFlareSendError          code
 // InvalidForManualFollowUp           noOp
 //
 // ROUTING MAP
@@ -36,19 +42,26 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //          → AttachCustomerFields.in(1)
 //            → Validate
 //              → HumanReview
-//                → SendGate
-//                  → SendEmail
+//                → ComposeHtmlEmail
+//                  → SendGate
+//                    → SendEmail
+//                     .out(1) → HandleSendEmailError
 //              → InvalidForManualFollowUp
 //        → AttachCustomerFields (↩ loop)
 // EmployeeTestTrigger
 //    → BuildEmployeeTestMessages
 //      → SendEmployeeTestEmail
+//       .out(1) → HandleEmployeeTestSendError
 // ScheduleTrigger
 //    → CustomerData (↩ loop)
 // EmployeeReminderSchedule
 //    → HeroCompanyPartners
 //      → PrepareSolarFlareReminders
-//        → SendSolarFlareReminder
+//        → PaceSolarFlareBatches
+//         .out(1) → SendSolarFlareReminder
+//            → ThrottleSolarFlareSend
+//              → PaceSolarFlareBatches (↩ loop)
+//           .out(1) → HandleSolarFlareSendError
 //      → ReportReminderCoverage
 // </workflow-map>
 
@@ -125,10 +138,12 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         type: 'n8n-nodes-base.scheduleTrigger',
         version: 1.3,
         position: [224, 688],
+        alwaysOutputData: true,
+        executeOnce: true,
     })
     EmployeeReminderSchedule = {
         rule: {
-            interval: [{}],
+            interval: [{}, {}],
         },
     };
 
@@ -216,7 +231,7 @@ return items;`,
         sendBody: true,
         specifyBody: 'json',
         jsonBody:
-            '={"model": "mistral", "stream": false, "prompt": "Du bist Assistent fuer SolarStar (deutscher Heizungsbetrieb). Schreibe eine kurze, freundliche Wartungserinnerung auf Deutsch. Nutze nur diese Daten und erfinde nichts: Name: {{$json.customer_name}}, Anlagentyp: {{$json.equipment_type}}, Letzte Wartung: {{$json.last_service_date}}. Anforderungen: 1) Beginne mit der direkten Anrede und dem Vornamen der Person. 2) 90-160 Woerter. 3) Keine Preiszusagen, keine nicht vorhandenen Details, keine Erwaehnung von Gutscheinen. 4) Klarer Call-to-Action fuer Terminvereinbarung bei SolarStar. 5) Erwaehne keine Telefonnummern oder E-Mail-Adressen; die Kontaktdaten des Ansprechpartners werden automatisch ergaenzt.", "options": {"temperature": 0.3}}',
+            '={"model": "mistral", "stream": false, "prompt": "Du bist Assistent für SolarStar (deutscher Heizungsbetrieb). Schreibe eine kurze, freundliche Wartungserinnerung auf Deutsch. Schreibe ausschließlich auf Deutsch und halte dich an die deutsche Rechtschreibung, insbesondere Umlaute (ä, ö, ü) und ß. Nutze nur diese Daten und erfinde nichts: Name: {{$json.customer_name}}, Anlagentyp: {{$json.equipment_type}}, Letzte Wartung: {{$json.last_service_date}}. Anforderungen: 1) Beginne mit der direkten Anrede und dem Vornamen der Person. 2) 90-160 Wörter. 3) Keine Preiszusagen, keine nicht vorhandenen Details, keine Erwähnung von Gutscheinen. 4) Eindeutige Aufforderung zur Terminvereinbarung bei SolarStar. 5) Erwähne keine Telefonnummern oder E-Mail-Adressen; die Kontaktdaten des Ansprechpartners werden automatisch ergänzt.", "options": {"temperature": 0.3}}',
         options: {},
     };
 
@@ -260,7 +275,7 @@ return {
     },
     is_valid: isValid,
     review_required: !isValid,
-    review_reason: isValid ? '' : 'Text fehlt, ist zu kurz/zu lang oder enthaelt den Vornamen nicht.',
+    review_reason: isValid ? '' : 'Text fehlt, ist zu kurz/zu lang oder enthält den Vornamen nicht.',
   },
 };`,
     };
@@ -280,11 +295,38 @@ return {
     };
 
     @node({
+        id: 'b9147d0a-10b8-4d8e-b3a8-6ddf8731d8b4',
+        name: 'Compose HTML Email',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [1600, 272],
+    })
+    ComposeHtmlEmail = {
+        mode: 'runOnceForEachItem',
+        jsCode: `const payload = $input.first().json.body ?? $input.first().json ?? {};
+const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const customerName = String(payload.customer_name ?? '').trim();
+const greeting = customerName ? 'Hallo ' + escapeHtml(customerName) + ',' : 'Sehr geehrte Damen und Herren,';
+// Fixed generic copy (no LLM text, no per-customer due date - matches the reference template).
+const bodyHtml = 'Die jährliche Wartung Ihrer Heizungsanlage steht im kommenden Monat an.<br/><br/>Damit Ihre Heizungsanlage weiterhin zuverlässig, effizient und sicher läuft, bitten wir Sie, Ihren Wartungstermin rechtzeitig zu vereinbaren.<br/><br/>Vereinbaren Sie Ihren Wunschtermin bequem online über den Button unten. Sollte das online nicht möglich sein, helfen wir Ihnen selbstverständlich auch persönlich weiter – telefonisch unter 02452 89039 oder per E-Mail an info@juergenhohnen.de.<br/><br/>Wir empfehlen eine frühzeitige Terminvereinbarung, damit wir Ihren Wunschtermin berücksichtigen können.<br/><br/>Für Rückfragen stehen wir Ihnen selbstverständlich gerne zur Verfügung.<br/><br/>Vielen Dank für Ihr Vertrauen.';
+const html = '<!DOCTYPE html><html lang="de"><body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;margin:0 auto;padding:24px;"><tr><td><p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">' + greeting + '</p><div style="font-size:16px;line-height:1.7;color:#1f2937;">' + bodyHtml + '</div><p style="margin:24px 0;"><a href="https://www.juergenhohnen.de/termin-vereinbaren/" style="display:inline-block;background-color:#0f4c81;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:bold;">Termin vereinbaren</a></p><p style="margin:24px 0 4px 0;font-size:15px;">Beste Grüße aus Heinsberg<br/>Jürgen Hohnen GmbH</p><hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" /><div style="border-left:3px solid #16a34a;padding-left:12px;"><div style="font-size:16px;font-weight:bold;color:#0f4c81;">Mehmet Yilmaz</div><div style="font-size:13px;color:#16a34a;font-weight:bold;margin-bottom:6px;">Kundendienstleiter</div><div style="font-size:13px;color:#374151;line-height:1.6;">T 02452 89039<br/>E <a href="mailto:mehmet@juergenhohnen.de" style="color:#0f4c81;">mehmet@juergenhohnen.de</a><br/>W <a href="https://www.juergenhohnen.de" style="color:#0f4c81;">www.juergenhohnen.de</a><br/>A Industrieparkstraße 4 · 52525 Heinsberg</div></div><p style="margin:20px 0 4px 0;font-size:12px;color:#6b7280;">Folgen Sie uns: <a href="https://www.facebook.com/juergenhohnen/" style="color:#0f4c81;">Facebook</a> · <a href="https://www.instagram.com/hohnen_gmbh/" style="color:#0f4c81;">Instagram</a></p><p style="margin:12px 0 0 0;font-size:11px;color:#9ca3af;line-height:1.5;">Geschäftsführer: Jürgen Hohnen · Sitz: Heinsberg · Handelsregister: HRB 10232 · Amtsgericht Aachen</p></td></tr></table></body></html>';
+return {
+  json: {
+    ...$input.first().json,
+    body: {
+      ...payload,
+      body_html: html,
+    },
+  },
+};`,
+    };
+
+    @node({
         id: '7aa6536b-53a4-4922-b531-fee33b46577b',
         name: 'Send Gate',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1600, 272],
+        position: [1824, 272],
     })
     SendGate = {
         jsCode: 'return $input.all().filter((item) => item.json.body?.is_valid === true);',
@@ -300,19 +342,41 @@ return {
         credentials: {
             microsoftOutlookOAuth2Api: { id: 'f1Xx191p4oB5LCsn', name: 'Juergen Hohnen GmbH (info@juergenhohnen.de)' },
         },
+        onError: 'continueErrorOutput',
     })
     SendEmail = {
         toRecipients: '={{$json.body.email}}',
-        subject: 'Ihre Wartungserinnerung von SolarStar',
-        bodyContent: `={{$json.body.generated_email_text}}
-
-Ihr Ansprechpartner fuer die Wartungsplanung:
-Mehmet Yilmaz - Leiter Kundendienst
-Telefon: 0178 2801200
-E-Mail: mehmet@juergenhohnen.de`,
+        subject: 'Ihre Wartungserinnerung bei Jürgen Hohnen',
+        bodyContent: '={{$json.body.body_html}}',
         additionalFields: {
-            bodyContentType: 'Text',
+            bodyContentType: 'HTML',
         },
+    };
+
+    @node({
+        id: '719f60a0-4ca8-40d0-91a6-acb7f2315155',
+        name: 'Handle Send Email Error',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [1824, 432],
+    })
+    HandleSendEmailError = {
+        jsCode: `const item = $input.first();
+const errSource = item.error ?? item.json?.error ?? {};
+const message = typeof errSource === 'string' ? errSource : String(errSource.message ?? errSource.description ?? JSON.stringify(errSource));
+const isQuotaError = /ErrorExceededMessageLimit|Daily Message\\/?Recipient limit|RefuseQuota|\\b429\\b/i.test(message);
+
+if (!isQuotaError) {
+  throw new Error(message || 'Unknown error sending email');
+}
+
+return {
+  json: {
+    send_status: 'failed_send_limit',
+    send_error: message,
+    note: 'Outlook send limit hit for info@juergenhohnen.de. Exchange Online allows ~30 messages/minute and 10k recipients/day; the paced batch loop should stay under that. If this recurs, lower the batch size or raise the throttle delay, then resend this reminder manually.',
+  },
+};`,
     };
 
     @node({
@@ -343,7 +407,13 @@ const heading = String(payload.heading ?? 'SolarStar Mitarbeiter-Test').trim() |
 const message = String(payload.message ?? 'Dies ist eine interne Testnachricht von SolarStar. Bitte nicht antworten.').trim()
   || 'Dies ist eine interne Testnachricht von SolarStar. Bitte nicht antworten.';
 const sentAt = new Date().toISOString().slice(0, 10);
-const bodyHtml = '<h1>' + heading + '</h1><p>' + message + '</p><p><strong>Unternehmen:</strong> ' + companyName + '<br><strong>Zweck:</strong> Interner Versandtest am ' + sentAt + '</p>';
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+const bodyHtml = '<!DOCTYPE html><html lang="de"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>' + escapeHtml(heading) + '</title></head><body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;margin:0 auto;padding:24px;"><tr><td><p style="margin:0 0 16px 0;font-size:20px;font-weight:bold;color:#0f4c81;">' + escapeHtml(heading) + '</p><div style="font-size:16px;line-height:1.7;color:#1f2937;">' + escapeHtml(message) + '</div><p style="margin:20px 0 4px 0;font-size:14px;line-height:1.6;color:#334155;"><strong>Unternehmen:</strong> ' + escapeHtml(companyName) + '<br/><strong>Zweck:</strong> Interner Versandtest am ' + escapeHtml(sentAt) + '</p><hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" /><div style="border-left:3px solid #16a34a;padding-left:12px;"><div style="font-size:16px;font-weight:bold;color:#0f4c81;">Mehmet Yilmaz</div><div style="font-size:13px;color:#16a34a;font-weight:bold;margin-bottom:6px;">Kundendienstleiter</div><div style="font-size:13px;color:#374151;line-height:1.6;">T 02452 89039<br/>E <a href="mailto:mehmet@juergenhohnen.de" style="color:#0f4c81;">mehmet@juergenhohnen.de</a><br/>W <a href="https://www.juergenhohnen.de" style="color:#0f4c81;">www.juergenhohnen.de</a><br/>A Industrieparkstraße 4 · 52525 Heinsberg</div></div><p style="margin:12px 0 0 0;font-size:11px;color:#9ca3af;line-height:1.5;">Geschäftsführer: Jürgen Hohnen · Sitz: Heinsberg · Handelsregister: HRB 10232 · Amtsgericht Aachen</p></td></tr></table></body></html>';
 
 return uniqueRecipients.map((email) => ({
   json: {
@@ -364,6 +434,7 @@ return uniqueRecipients.map((email) => ({
         credentials: {
             microsoftOutlookOAuth2Api: { id: 'f1Xx191p4oB5LCsn', name: 'Juergen Hohnen GmbH (info@juergenhohnen.de)' },
         },
+        onError: 'continueErrorOutput',
     })
     SendEmployeeTestEmail = {
         toRecipients: '={{$json.email}}',
@@ -375,6 +446,32 @@ return uniqueRecipients.map((email) => ({
     };
 
     @node({
+        id: 'a21ddcd7-0a67-432b-a366-1ef798e075c2',
+        name: 'Handle Employee Test Send Error',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [768, 672],
+    })
+    HandleEmployeeTestSendError = {
+        jsCode: `const item = $input.first();
+const errSource = item.error ?? item.json?.error ?? {};
+const message = typeof errSource === 'string' ? errSource : String(errSource.message ?? errSource.description ?? JSON.stringify(errSource));
+const isQuotaError = /ErrorExceededMessageLimit|Daily Message\\/?Recipient limit|RefuseQuota|\\b429\\b/i.test(message);
+
+if (!isQuotaError) {
+  throw new Error(message || 'Unknown error sending email');
+}
+
+return {
+  json: {
+    send_status: 'failed_send_limit',
+    send_error: message,
+    note: 'Outlook send limit hit for info@juergenhohnen.de. Exchange Online allows ~30 messages/minute and 10k recipients/day; the paced batch loop should stay under that. If this recurs, lower the batch size or raise the throttle delay, then resend this reminder manually.',
+  },
+};`,
+    };
+
+    @node({
         id: '77f37714-4af0-467f-aa7c-eb1d521fd53d',
         name: 'Prepare Solar Flare Reminders',
         type: 'n8n-nodes-base.code',
@@ -383,6 +480,13 @@ return uniqueRecipients.map((email) => ({
     })
     PrepareSolarFlareReminders = {
         jsCode: `const partners = $input.first().json.data?.company?.partners ?? [];
+
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 // Top-priority recipients: always first in the send list, ahead of HERO partners.
 const PRIORITY_RECIPIENTS = [
@@ -420,19 +524,7 @@ const fromHero = partners
 
 const selected = [...PRIORITY_RECIPIENTS, ...fromHero];
 
-// Daily send cap: the consumer mailbox (info@juergenhohnen.de) is quota-limited
-// (429 ErrorExceededMessageLimit). Keep well under the unverified-account limit.
-const MAX_DAILY_RECIPIENTS = 10;
-const capped = selected.slice(0, MAX_DAILY_RECIPIENTS);
-if (selected.length > capped.length) {
-    console.log('SolarFlareReminderCap', JSON.stringify({
-        total_eligible: selected.length,
-        sent_cap: MAX_DAILY_RECIPIENTS,
-        skipped: selected.length - capped.length,
-    }));
-}
-
-return capped.map((record) => {
+return selected.map((record) => {
     // Employee reminder uses the customer-facing template format so staff
     // preview exactly what customers will receive.
     const SUPPORT_PHONE = '0178 2801200';
@@ -451,30 +543,17 @@ return capped.map((record) => {
     // Optional kWp line: only rendered when system size data is available.
     const systemSizeKwp = record.system_size_kwp ?? null;
     const systemSizeLine = systemSizeKwp
-        ? 'Ihre ' + systemSizeKwp + '-kWp-Anlage profitiert besonders von einer regelmaessigen Kontrolle.\\n\\n'
+        ? 'Ihre ' + systemSizeKwp + '-kWp-Anlage profitiert besonders von einer regelmäßigen Kontrolle.<br/><br/>'
         : '';
 
     const subject = 'Erinnerung: Wartung Ihrer Solaranlage bis ' + dueDateFormatted;
-    const body =
-        'Hallo ' + firstName + ',\\n\\n' +
-        'Ihre Solaranlage braucht wieder Aufmerksamkeit.\\n\\n' +
-        'Spaetestens in 3 Monaten (bis ' + dueDateFormatted + ') ist die regulaere Wartung faellig - ' +
-        'das sichert die optimale Leistung und schliesst Ausfallrisiken aus.\\n\\n' +
-        systemSizeLine +
-        'Was wir machen:\\n' +
-        '-> Kontrolle aller Komponenten\\n' +
-        '-> Ertragsoptimierung\\n' +
-        '-> Schnelle Behebung von Maengeln\\n\\n' +
-        '---\\n' +
-        'Termin vereinbaren:\\n' +
-        'Anruf: ' + SUPPORT_PHONE + '\\n\\n' +
-        'Mit freundlichen Gruessen\\nSolarStar Automatisierung';
+    const bodyHtml = '<!DOCTYPE html><html lang="de"><body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;margin:0 auto;padding:24px;"><tr><td><p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">Hallo ' + escapeHtml(firstName) + ',</p><div style="font-size:16px;line-height:1.7;color:#1f2937;">Ihre Solaranlage braucht wieder Aufmerksamkeit.<br/><br/>Spätestens in 3 Monaten (bis ' + escapeHtml(dueDateFormatted) + ') ist die reguläre Wartung fällig – das sichert die optimale Leistung und schließt Ausfallrisiken aus.<br/><br/>' + systemSizeLine + 'Was wir machen:<br/>&rarr; Kontrolle aller Komponenten<br/>&rarr; Ertragsoptimierung<br/>&rarr; Schnelle Behebung von Mängeln<br/><br/>Vereinbaren Sie Ihren Wunschtermin bequem online über den Button unten oder telefonisch unter ' + escapeHtml(SUPPORT_PHONE) + '.</div><p style="margin:24px 0;"><a href="https://www.juergenhohnen.de/termin-vereinbaren/" style="display:inline-block;background-color:#0f4c81;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:bold;">Termin vereinbaren</a></p><p style="margin:24px 0 4px 0;font-size:15px;">Beste Grüße aus Heinsberg<br/>Jürgen Hohnen GmbH</p><hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" /><div style="border-left:3px solid #16a34a;padding-left:12px;"><div style="font-size:16px;font-weight:bold;color:#0f4c81;">Mehmet Yilmaz</div><div style="font-size:13px;color:#16a34a;font-weight:bold;margin-bottom:6px;">Kundendienstleiter</div><div style="font-size:13px;color:#374151;line-height:1.6;">T 02452 89039<br/>E <a href="mailto:mehmet@juergenhohnen.de" style="color:#0f4c81;">mehmet@juergenhohnen.de</a><br/>W <a href="https://www.juergenhohnen.de" style="color:#0f4c81;">www.juergenhohnen.de</a><br/>A Industrieparkstraße 4 · 52525 Heinsberg</div></div><p style="margin:20px 0 4px 0;font-size:12px;color:#6b7280;">Folgen Sie uns: <a href="https://www.facebook.com/juergenhohnen/" style="color:#0f4c81;">Facebook</a> · <a href="https://www.instagram.com/hohnen_gmbh/" style="color:#0f4c81;">Instagram</a></p><p style="margin:12px 0 0 0;font-size:11px;color:#9ca3af;line-height:1.5;">Geschäftsführer: Jürgen Hohnen · Sitz: Heinsberg · Handelsregister: HRB 10232 · Amtsgericht Aachen</p></td></tr></table></body></html>';
 
     return {
         json: {
             ...record,
             subject,
-            body,
+            body_html: bodyHtml,
         },
     };
 });`,
@@ -521,23 +600,80 @@ return [{ json: report }];`,
     };
 
     @node({
+        id: '22bac7ba-42e2-4876-b0f1-9df1b474341f',
+        name: 'Pace Solar Flare Batches',
+        type: 'n8n-nodes-base.splitInBatches',
+        version: 3,
+        position: [976, 688],
+    })
+    PaceSolarFlareBatches = {
+        batchSize: 10,
+        options: {},
+    };
+
+    @node({
         id: '58472fa5-f341-4a61-93f8-c73de79474f8',
         webhookId: 'db4f037d-c3a0-420e-b17b-a8837e8ca258',
         name: 'Send Solar Flare Reminder',
         type: 'n8n-nodes-base.microsoftOutlook',
         version: 2,
-        position: [992, 688],
+        position: [1200, 688],
         credentials: {
             microsoftOutlookOAuth2Api: { id: 'f1Xx191p4oB5LCsn', name: 'Juergen Hohnen GmbH (info@juergenhohnen.de)' },
         },
+        onError: 'continueErrorOutput',
+        alwaysOutputData: true,
+        retryOnFail: true,
+        maxTries: 3,
+        waitBetweenTries: 5000,
     })
     SendSolarFlareReminder = {
         toRecipients: '={{$json.email}}',
         subject: '={{$json.subject}}',
-        bodyContent: '={{$json.body}}',
+        bodyContent: '={{$json.body_html}}',
         additionalFields: {
-            bodyContentType: 'Text',
+            bodyContentType: 'HTML',
         },
+    };
+
+    @node({
+        id: '7db5d0d6-051f-4b41-9876-2d90a478a8dd',
+        webhookId: '008cc052-7241-4fa5-8361-fede5900e983',
+        name: 'Throttle Solar Flare Send',
+        type: 'n8n-nodes-base.wait',
+        version: 1.1,
+        position: [1424, 688],
+    })
+    ThrottleSolarFlareSend = {
+        resume: 'timeInterval',
+        amount: 30,
+        unit: 'seconds',
+    };
+
+    @node({
+        id: 'e426abc3-062e-4584-84d3-dc70d433155c',
+        name: 'Handle Solar Flare Send Error',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [1200, 848],
+    })
+    HandleSolarFlareSendError = {
+        jsCode: `const item = $input.first();
+const errSource = item.error ?? item.json?.error ?? {};
+const message = typeof errSource === 'string' ? errSource : String(errSource.message ?? errSource.description ?? JSON.stringify(errSource));
+const isQuotaError = /ErrorExceededMessageLimit|Daily Message\\/?Recipient limit|RefuseQuota|\\b429\\b/i.test(message);
+
+if (!isQuotaError) {
+  throw new Error(message || 'Unknown error sending email');
+}
+
+return {
+  json: {
+    send_status: 'failed_send_limit',
+    send_error: message,
+    note: 'Outlook send limit hit for info@juergenhohnen.de. Exchange Online allows ~30 messages/minute and 10k recipients/day; the paced batch loop should stay under that. If this recurs, lower the batch size or raise the throttle delay, then resend this reminder manually.',
+  },
+};`,
     };
 
     @node({
@@ -568,9 +704,16 @@ return [{ json: report }];`,
         this.AttachCustomerFields.out(0).to(this.Validate.in(0));
         this.Validate.out(0).to(this.HumanReview.in(0));
         this.Validate.out(0).to(this.InvalidForManualFollowUp.in(0));
-        this.HumanReview.out(0).to(this.SendGate.in(0));
+        this.HumanReview.out(0).to(this.ComposeHtmlEmail.in(0));
+        this.ComposeHtmlEmail.out(0).to(this.SendGate.in(0));
         this.SendGate.out(0).to(this.SendEmail.in(0));
+        this.SendEmail.out(1).to(this.HandleSendEmailError.in(0));
         this.BuildEmployeeTestMessages.out(0).to(this.SendEmployeeTestEmail.in(0));
-        this.PrepareSolarFlareReminders.out(0).to(this.SendSolarFlareReminder.in(0));
+        this.SendEmployeeTestEmail.out(1).to(this.HandleEmployeeTestSendError.in(0));
+        this.PrepareSolarFlareReminders.out(0).to(this.PaceSolarFlareBatches.in(0));
+        this.PaceSolarFlareBatches.out(1).to(this.SendSolarFlareReminder.in(0));
+        this.SendSolarFlareReminder.out(0).to(this.ThrottleSolarFlareSend.in(0));
+        this.SendSolarFlareReminder.out(1).to(this.HandleSolarFlareSendError.in(0));
+        this.ThrottleSolarFlareSend.out(0).to(this.PaceSolarFlareBatches.in(0));
     }
 }

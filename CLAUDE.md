@@ -64,6 +64,7 @@ External dependencies wired via n8n credentials: HERO GraphQL (`httpHeaderAuth`,
 
 - **`=` expression prefix**: an n8n string parameter (e.g. `jsonBody`) only evaluates `{{ }}` expressions when the value **starts with `=`**. Without it, the template is sent as literal text with **no error**. Verify via actual execution `runData`, not just a "success" status.
 - **`wait` node + `resume: 'webhook'`** discards the original item's json on resume and replaces it with the incoming webhook payload. Re-attach any fields downstream nodes need (e.g. `is_valid`) after resume — nothing passes through automatically.
+- **Transformer takes inline literals only**: a node parameter must be a literal (string/number/boolean/null/array/object). Referencing a hoisted `const` (e.g. `jsCode: SEND_ERROR_HANDLER_JS`) makes the **whole file** unparseable — `n8nac push` then reports a misleading `💥 Conflict detected` rather than a syntax error. Look for `Cannot use identifier "X" as a node parameter value` in the push output. Duplicate the literal at each use site instead.
 - **Raw workflow PUT** (bypassing `n8nac`): the `settings` object must contain only known keys (`executionOrder`); extras like `binaryMode` cause a `400`. See the raw-API skill.
 - **n8n API key** for MCP/raw-API calls is in `.vscode/settings.json` → `n8nMcp.apiKey`, **not** in `.env`.
 - **n8n Postgres**: connect with `docker exec n8n_postgres psql -U n8n -d n8n` (user/db `n8n`, not `postgres`). Host port 5432 is a different Postgres (rag_backend).

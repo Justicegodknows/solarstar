@@ -21,6 +21,17 @@
                 "--header",
                 "x-api-key: 1c756ac461msh57c09ab89e5b6fdp10023djsn55754c83349b"
             ]
+        },
+        "RapidAPI Hub - Real-Time LinkedIn Scraper": {
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://mcp.rapidapi.com",
+                "--header",
+                "x-api-host: linkedin-api8.p.rapidapi.com",
+                "--header",
+                "x-api-key: 44bda113e6msh894279672e4f941p1dbab0jsna7d6f0716e7f"
+            ]
         }
     }
 }
