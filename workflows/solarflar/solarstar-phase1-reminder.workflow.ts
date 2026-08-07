@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : SolarStar Phase 1 - Wartungs-Erinnerungen
-// Nodes   : 25  |  Connections: 24
+// Nodes   : 27  |  Connections: 26
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -14,6 +14,8 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // CustomerData                       httpRequest                [creds]
 // HeroCompanyPartners                httpRequest                [creds]
 // MapHeroCustomers                   code
+// SeptemberMaintenanceTrigger        manualTrigger
+// SeptemberMaintenanceList           code
 // GenerateEmail                      httpRequest
 // AttachCustomerFields               merge
 // Validate                           code
@@ -48,6 +50,9 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //                     .out(1) → HandleSendEmailError
 //              → InvalidForManualFollowUp
 //        → AttachCustomerFields (↩ loop)
+// SeptemberMaintenanceTrigger (manual, one-off Sep-2026 batch from xlsx)
+//    → SeptemberMaintenanceList
+//      → ComposeHtmlEmail (fixed German copy — skips LLM/Validate/HumanReview)
 // EmployeeTestTrigger
 //    → BuildEmployeeTestMessages
 //      → SendEmployeeTestEmail
@@ -219,6 +224,176 @@ return items;`,
     };
 
     @node({
+        id: 'b7bb0ec4-8126-47d8-92be-73a3f49455dc',
+        name: 'September Maintenance Trigger',
+        type: 'n8n-nodes-base.manualTrigger',
+        version: 1,
+        position: [592, 32],
+    })
+    SeptemberMaintenanceTrigger = {};
+
+    @node({
+        id: '10d261d5-acdf-436c-a76e-47054fb83fcf',
+        name: 'September Maintenance List',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [816, 32],
+    })
+    SeptemberMaintenanceList = {
+        // One-off manual batch from "Wartungen September 2026.xlsx" (customers due for
+        // maintenance, curated outside HERO). Emits send-ready items (body.is_valid=true)
+        // straight into Compose HTML Email (fixed German copy) → Send Gate → Send Email,
+        // bypassing the LLM draft, Validate, and Human Review steps.
+        jsCode: `const RAW_RECORDS = [
+  { name: 'André Römer', email: 'andreundanja@t-online.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Ralf und Melanie Bolten', email: 'ralfbolten66@t-online.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Leo Baltes', email: 'h_baltes@gmx.net', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Raschke Clemens', email: 'hc.ra@t-online.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Volker Kokot', email: 'volker.kokot@freenet.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Franz Raimann', email: 'franz-Raimann@t-online.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Franz Raimann', email: 'franz-Raimann@t-online.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Stefan von Birgelen', email: 's.vonbirgelen@vonvirgelen.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Johannes Bronnenberg', email: 'johannes.bronnenberg@kreis-heinsberg.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Ludger Mimberg', email: 'lmimberg@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Tamara Schröder-Salem', email: 't.schroeder85@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Roland Hoffmann', email: 'keine Email vorhanden', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Thomas Jansen', email: 'thomasjansen@gmx.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Wilfried Jentgens Bedachungen', email: 'jentgens.bedachungen@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Heinz Jansen', email: 'heinzellijansen@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Maria Küsters', email: 'maria.kuesters@gmail.com', type: '(Keine Auftragsart)' },
+  { name: 'Dr. Helmut Stienen', email: 'helmut.stienennaew@nato.int', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Georg Weber', email: 'info@hiwe.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Stephanie und Sebastian Schmitz', email: 'seb_schmitz@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Karl-Heinz Lüttgens', email: 'karlheinzluettgens@yahoo.de', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Zahnarztpraxis Dr. Wim van Thoor', email: 'mail@dr-van-thoor.com', type: 'Rein. Lüftungsanlage' },
+  { name: 'Natalie Daniels', email: 'engel1001.nd@gmail.com', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Lambert Palmen', email: 'lambert.palmen@t-online.de', type: '(Keine Auftragsart)' },
+  { name: 'Julia Nießen', email: 'juliatusold@web.de', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Renate Gingter', email: 'keine Email vorhanden', type: '(Keine Auftragsart)' },
+  { name: 'Christa Stenzel', email: 'christa@stenzel.biz', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Klaus Ernst', email: 'info@kfz-ernst.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Marianne Claßen', email: 'franz.classenloud.com', type: 'Rein. Pellets bis 32 KW' },
+  { name: 'Ulrich Sieber', email: 'Siebert.Ulrich@web.de', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Axel Ophüls', email: 'Axel.Ophuels@mariahilf.de', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Andre Hummen', email: 'ahummen@t-online.de', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Dr. Jakob Bischof', email: 'jakob@bischof-mg.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Andreas Kandulski', email: 'andreas.kandulski@imail.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Jürgen Kellertshofer', email: 'j.kellertshofer@web.de', type: 'Rein. Pellets bis 32 KW' },
+  { name: 'Daniela und Ralf Jansen', email: 'jansen-daniela@gmx.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Daniela und Ralf Jansen', email: 'jansen-daniela@gmx.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Daniela Rowlin', email: 'daniela.wolpert83@gmx.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Domenic Domsel', email: 'keine Email vorhanden', type: 'Rein. Wärmepumpe' },
+  { name: 'Erwin Hausmann', email: 'pferdehausmann@t-online.de', type: '(Keine Auftragsart)' },
+  { name: 'Beate Kessels', email: 'keine E-Mail vorhanden', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Fred Rongen', email: 'fred.rongen@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Wolfgang Berg', email: 'berg.wolfgang@freenet.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Manfred Baum', email: 'manfred.baum@mail.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Heike Kirstein', email: 'may-sun@gmx.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Hubert Mobers', email: ' d.szydzik@web.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Achim Noculak', email: 'a.noculak@arcor.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Karsten Haeser', email: 'karsten.haeser@arcor.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Ronald Koep', email: 'r.koep@gmx.net', type: 'Rein. Wärmepumpe' },
+  { name: 'Saskia Fughe', email: 'SaskiaF@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Jochen Gürtler', email: 'jochen.guertler@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Andreas Görtges', email: 'agoertges@gmx.de', type: 'Rein. Pellets bis 32 KW' },
+  { name: 'Andreas Ellendt', email: 'ellendt@nubgmbh.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Lea Palm', email: 'Lea_ac@gmx.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Anja Fetten', email: 'anja6820@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Paula und Egidius Jansen', email: 'egi.jansen@freenet.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Michael Pauer', email: 'gopauer@googlemail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Hannjörg Weisker', email: 'h.weisker@hotmail.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Hans Walter Schönleber', email: 'hschoenleber@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Karl Jütten', email: 'karl.juetten@gmx.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Egidius Jansen', email: 'egi.jansen@freenet.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Lothar Laven', email: 'postamt@gmx.info', type: '(Keine Auftragsart)' },
+  { name: 'Rainer Schulte', email: 'rainer.schulte@herzogenrath.de', type: '(Keine Auftragsart)' },
+  { name: 'Manouchehr Balooch', email: 'm_balooch@yahoo.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Maria Nussbaum', email: 'maria.nussbaum@t-online.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Jochen Lingens', email: 'jochen.lingens@mail.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'MFH', email: 'postamt@gmx.info', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Uwe Baumann', email: 'uweunddanielabaumann@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Werner Panzer', email: 'werner.w.panzer@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Bernd Reinckens', email: 'breinckens@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Dieter Vanselow', email: 'dieter-vanselow@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Klaus Berger', email: 'jimknopf57@arcor.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Helmut Philippen', email: 'antonia2231@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Tanja Esser', email: 'carsten.esser@hotmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Roland Roller', email: 'roroland@web.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Peter Wiemann', email: 'classikfan300@gmx.de', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Heinz-Peter Kohnen', email: 'hp.kohnen@online.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Roland Pawlak', email: 'rpawlak@web.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Otto Jonel', email: 'sfbugs@t-online.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Schockert – blatt & blume', email: 'kontakt@blattundblume.com', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Michael König', email: 'meiers812@web.de', type: 'Rein. Pellets Anlage Smart' },
+  { name: 'Nicole Laumen und Ricardo Martinez', email: 'rima071272@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Wohnhaus Kaarst Vorst', email: 'wh.vorst@luw.nrw', type: '(Keine Auftragsart)' },
+  { name: 'Swetlana Mokstadt', email: 's_mokstadt@yahoo.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Ulrich Siebert', email: 'Siebert.Ulrich@web.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Marcus Bierei', email: 'marcus@sozialmanager.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Irina Hastenrath', email: 'dieter-hastenrath@t-online.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Surek - Bischof', email: 'hl.bischof@freibadkirchhoven.de', type: '(Keine Auftragsart)' },
+  { name: 'Klaus Eske', email: 'kleske@freenet.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Hartmut Gärtner', email: 'uhgaertner@t-online.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Christoph von Cleef', email: 'khvoncleef@t-online.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Heinz Lambertz', email: 'heinz.lambertz@gmx.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Ralf Düren', email: 'bandon@gmx.de', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Raf Jehoul', email: 'jehoul@web.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Thomas Horn', email: 'athcorn@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Rene Kranz', email: 'renekranz@web.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Maria Katharina Banken', email: 'h.banken@web.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Frank Weckauf', email: 'frankweckauf40@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Dietrich Meyer zu Altenschildesche', email: 'dietrich20@gmx.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Torsten Thevissen', email: 'thevissentorsten@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Hans-Jürgen Röls', email: 'hjroels@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Gerd Laurich', email: 'gerlau54@online.de', type: '(Keine Auftragsart)' },
+  { name: 'Verena Breitbarth', email: 'v.knarren@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Yvonne-Nicole Kressin', email: 'meineserviceadresse@gmx.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Thomas Groeger', email: 'thomasgroeger12@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Dr. Helmut Dieckmann', email: 'helmutd5@web.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Ingeburg Jütten', email: 'gangolf.ehlen@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Michael Robrock', email: 'info@mmrimmo.de', type: 'Rein. Pellets bis 32 KW' },
+  { name: 'Alexander Jütten', email: 'hanaj@t-online.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Gerda Blaeser', email: 'niessen-b@t-online.de', type: 'Rein. Pellets bis 56 KW' },
+  { name: 'Florian Lindwehr', email: 'f.lindwehr@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Karl-Heinz Specks', email: 'mariannespecks@gmail.com', type: 'Rein. Wärmepumpe' },
+  { name: 'Aloys Vieten', email: 'aloys.vieten@new-online.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Friedemann Gräber', email: 'f.graeber@gmx.net', type: 'Rein. Wärmepumpe' },
+  { name: 'Robert Waschk', email: 'r.waschk@gmx.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Frank Rosen', email: 'frankrosen@gmx.net', type: 'Rein. Zentralhzg bis 25KW' },
+  { name: 'Gerd Backes', email: 'gerd-backes@t-online.de', type: 'Rein. Wärmepumpe' },
+  { name: 'Markus Grünitz', email: 'M.ganzert1@gmx.de', type: 'Rein. Pellets bis 25 KW' },
+  { name: 'Lukas Wunderlich', email: 'lukas.wunderlich93@gmail.com', type: 'Rein. Pellets bis 25 KW' },
+];
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const seenEmails = new Set();
+const items = [];
+
+for (const record of RAW_RECORDS) {
+  const email = String(record.email ?? '').trim();
+  if (!emailPattern.test(email) || seenEmails.has(email)) continue;
+  seenEmails.add(email);
+
+  const type = String(record.type ?? '').trim();
+  const equipmentType = type.startsWith('(') ? '' : type;
+
+  items.push({
+    json: {
+      body: {
+        customer_name: record.name,
+        email,
+        equipment_type: equipmentType,
+        last_service_date: '',
+        is_valid: true,
+      },
+    },
+  });
+}
+
+return items;`,
+    };
+
+    @node({
         id: '5ff9d811-e486-4fde-8f01-10f7ce262e4b',
         name: 'Generate Email',
         type: 'n8n-nodes-base.httpRequest',
@@ -303,7 +478,7 @@ return {
     })
     ComposeHtmlEmail = {
         mode: 'runOnceForEachItem',
-        jsCode: `const payload = $input.first().json.body ?? $input.first().json ?? {};
+        jsCode: `const payload = $input.item.json.body ?? $input.item.json ?? {};
 const escapeHtml = (value) => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const customerName = String(payload.customer_name ?? '').trim();
 const greeting = customerName ? 'Hallo ' + escapeHtml(customerName) + ',' : 'Sehr geehrte Damen und Herren,';
@@ -312,7 +487,7 @@ const bodyHtml = 'Die jährliche Wartung Ihrer Heizungsanlage steht im kommenden
 const html = '<!DOCTYPE html><html lang="de"><body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#1f2937;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;margin:0 auto;padding:24px;"><tr><td><p style="margin:0 0 16px 0;font-size:16px;line-height:1.6;">' + greeting + '</p><div style="font-size:16px;line-height:1.7;color:#1f2937;">' + bodyHtml + '</div><p style="margin:24px 0;"><a href="https://www.juergenhohnen.de/termin-vereinbaren/" style="display:inline-block;background-color:#0f4c81;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:bold;">Termin vereinbaren</a></p><p style="margin:24px 0 4px 0;font-size:15px;">Beste Grüße aus Heinsberg<br/>Jürgen Hohnen GmbH</p><hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" /><div style="border-left:3px solid #16a34a;padding-left:12px;"><div style="font-size:16px;font-weight:bold;color:#0f4c81;">Mehmet Yilmaz</div><div style="font-size:13px;color:#16a34a;font-weight:bold;margin-bottom:6px;">Kundendienstleiter</div><div style="font-size:13px;color:#374151;line-height:1.6;">T 02452 89039<br/>E <a href="mailto:mehmet@juergenhohnen.de" style="color:#0f4c81;">mehmet@juergenhohnen.de</a><br/>W <a href="https://www.juergenhohnen.de" style="color:#0f4c81;">www.juergenhohnen.de</a><br/>A Industrieparkstraße 4 · 52525 Heinsberg</div></div><p style="margin:16px 0 4px 0;font-size:12px;"><a href="https://www.juergenhohnen.de/wp-content/uploads/2026/01/juergenhohnen-preisliste2026-5.pdf" style="color:#0f4c81;font-weight:bold;text-decoration:none;">Unsere Wartungspreise</a>&nbsp;·&nbsp;<a href="https://heyzine.com/flip-book/4acef66dce.html" style="color:#0f4c81;font-weight:bold;text-decoration:none;">Firmenbroschüre</a></p><p style="margin:8px 0 4px 0;font-size:12px;color:#6b7280;">Folgen Sie uns: <a href="https://www.facebook.com/juergenhohnen/" style="color:#0f4c81;">Facebook</a> · <a href="https://www.instagram.com/hohnen_gmbh/" style="color:#0f4c81;">Instagram</a></p><p style="margin:12px 0 0 0;font-size:11px;color:#9ca3af;line-height:1.5;">Geschäftsführer: Jürgen Hohnen · Sitz: Heinsberg · Handelsregister: HRB 10232 · Amtsgericht Aachen</p></td></tr></table></body></html>';
 return {
   json: {
-    ...$input.first().json,
+    ...$input.item.json,
     body: {
       ...payload,
       body_html: html,
@@ -700,6 +875,8 @@ return {
         this.HeroCompanyPartners.out(0).to(this.ReportReminderCoverage.in(0));
         this.MapHeroCustomers.out(0).to(this.GenerateEmail.in(0));
         this.MapHeroCustomers.out(0).to(this.AttachCustomerFields.in(0));
+        this.SeptemberMaintenanceTrigger.out(0).to(this.SeptemberMaintenanceList.in(0));
+        this.SeptemberMaintenanceList.out(0).to(this.ComposeHtmlEmail.in(0));
         this.GenerateEmail.out(0).to(this.AttachCustomerFields.in(1));
         this.AttachCustomerFields.out(0).to(this.Validate.in(0));
         this.Validate.out(0).to(this.HumanReview.in(0));
