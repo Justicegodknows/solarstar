@@ -2,13 +2,14 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : SolarStar Phase 1 - Wartungs-Erinnerungen
-// Nodes   : 27  |  Connections: 26
+// Nodes   : 28  |  Connections: 27
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
 // Property name                    Node type (short)         Flags
 // TestTrigger                        webhook
 // EmployeeTestTrigger                webhook
+// EmployeeReminderTrigger            webhook
 // ScheduleTrigger                    scheduleTrigger
 // EmployeeReminderSchedule           scheduleTrigger            [alwaysOutput] [executeOnce]
 // CustomerData                       httpRequest                [creds]
@@ -68,6 +69,8 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //              → PaceSolarFlareBatches (↩ loop)
 //           .out(1) → HandleSolarFlareSendError
 //      → ReportReminderCoverage
+// EmployeeReminderTrigger (webhook, on-demand run — same chain, no LLM/Validate/HumanReview)
+//    → HeroCompanyPartners (↩ loop)
 // </workflow-map>
 
 // =====================================================================
@@ -117,6 +120,20 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
     EmployeeTestTrigger = {
         httpMethod: 'POST',
         path: 'solarstar-employee-test',
+        options: {},
+    };
+
+    @node({
+        id: 'd6848976-aef4-4617-b228-f6a7b35ace09',
+        webhookId: 'f86e5757-70ee-41f7-a4d9-eee3778059a1',
+        name: 'Employee Reminder Trigger',
+        type: 'n8n-nodes-base.webhook',
+        version: 2.1,
+        position: [224, 864],
+    })
+    EmployeeReminderTrigger = {
+        httpMethod: 'POST',
+        path: 'solarstar-employee-reminder-run',
         options: {},
     };
 
@@ -870,6 +887,7 @@ return {
         this.EmployeeTestTrigger.out(0).to(this.BuildEmployeeTestMessages.in(0));
         this.ScheduleTrigger.out(0).to(this.CustomerData.in(0));
         this.EmployeeReminderSchedule.out(0).to(this.HeroCompanyPartners.in(0));
+        this.EmployeeReminderTrigger.out(0).to(this.HeroCompanyPartners.in(0));
         this.CustomerData.out(0).to(this.MapHeroCustomers.in(0));
         this.HeroCompanyPartners.out(0).to(this.PrepareSolarFlareReminders.in(0));
         this.HeroCompanyPartners.out(0).to(this.ReportReminderCoverage.in(0));
