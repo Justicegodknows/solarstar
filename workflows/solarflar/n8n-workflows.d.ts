@@ -106,6 +106,8 @@ declare module '@n8n-as-code/transformer' {
         credentials?: Record<string, { id: string; name: string }>;
         /** Error handling mode */
         onError?: 'continueErrorOutput' | 'continueRegularOutput' | 'stopWorkflow';
+        /** Node is disabled (skipped at runtime) */
+        disabled?: boolean;
         /** Always output data even when the node has no results */
         alwaysOutputData?: boolean;
         /** Execute this node only once, for the first item */

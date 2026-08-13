@@ -4,9 +4,27 @@ Living execution status for the SolarStar program. **Every agent must read this 
 
 **Single source of truth:** [solarstar-execution-plan.md](solarstar-execution-plan.md) defines the program — problem statement, target architecture, technology, the phased roadmap (Phase 0–4), acceptance criteria (AC), definition of done (DoD), and risks. This file does **not** redefine scope; it tracks live progress *against* the plan. If work and plan disagree, follow the plan or update the plan first — do not let this file drift into a second source of truth.
 
-Last updated: 2026-08-07
+Last updated: 2026-08-13
 
 ## Recent change
+
+Employee reminder flow fully disabled (2026-08-13). User had disabled the
+trigger nodes in the UI, yet `Employee Reminder Schedule` kept sending daily
+at 22:00 UTC (executions 1708–1710): n8n only re-registers schedule/webhook
+triggers on workflow **deactivate/activate**, so the pre-edit cron stayed
+alive in memory even though the saved workflow JSON showed the node
+disabled. Fix: deactivated the workflow via
+`POST /api/v1/workflows/TyzTNzhz9QuLKNiH/deactivate` (verified
+`active: false`). All 5 automatic triggers (Test Trigger, Employee Test
+Trigger, Employee Reminder Trigger, Schedule Trigger, Employee Reminder
+Schedule) are `disabled: true` live; only the manual September Maintenance
+Trigger remains enabled, and manual triggers work on inactive workflows. TS
+source synced (`active: false` + `disabled: true` on the 5 triggers;
+`disabled?: boolean` added to the node decorator typing). **Caveat:** the
+monthly customer flow is also off now — re-enabling any schedule requires
+both re-enabling the node and re-activating the workflow.
+
+## Previous change
 
 Added graceful handling for the Outlook `429 ErrorExceededMessageLimit`
 ("Daily Message/Recipient limit exceeded") error reported against

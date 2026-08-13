@@ -7,11 +7,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
 // Property name                    Node type (short)         Flags
-// TestTrigger                        webhook
-// EmployeeTestTrigger                webhook
-// EmployeeReminderTrigger            webhook
-// ScheduleTrigger                    scheduleTrigger
-// EmployeeReminderSchedule           scheduleTrigger            [alwaysOutput] [executeOnce]
+// TestTrigger                        webhook                    [disabled]
+// EmployeeTestTrigger                webhook                    [disabled]
+// EmployeeReminderTrigger            webhook                    [disabled]
+// ScheduleTrigger                    scheduleTrigger            [disabled]
+// EmployeeReminderSchedule           scheduleTrigger            [alwaysOutput] [executeOnce] [disabled]
 // CustomerData                       httpRequest                [creds]
 // HeroCompanyPartners                httpRequest                [creds]
 // MapHeroCustomers                   code
@@ -80,7 +80,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 @workflow({
     id: 'TyzTNzhz9QuLKNiH',
     name: 'SolarStar Phase 1 - Wartungs-Erinnerungen',
-    active: true,
+    active: false,
     isArchived: false,
     settings: {
         executionOrder: 'v1',
@@ -102,6 +102,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         type: 'n8n-nodes-base.webhook',
         version: 2.1,
         position: [224, 160],
+        disabled: true,
     })
     TestTrigger = {
         httpMethod: 'POST',
@@ -116,6 +117,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         type: 'n8n-nodes-base.webhook',
         version: 2.1,
         position: [224, 512],
+        disabled: true,
     })
     EmployeeTestTrigger = {
         httpMethod: 'POST',
@@ -130,6 +132,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         type: 'n8n-nodes-base.webhook',
         version: 2.1,
         position: [224, 864],
+        disabled: true,
     })
     EmployeeReminderTrigger = {
         httpMethod: 'POST',
@@ -143,6 +146,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         type: 'n8n-nodes-base.scheduleTrigger',
         version: 1.3,
         position: [224, 320],
+        disabled: true,
     })
     ScheduleTrigger = {
         rule: {
@@ -162,6 +166,7 @@ export class SolarstarPhase1WartungsErinnerungenWorkflow {
         position: [224, 688],
         alwaysOutputData: true,
         executeOnce: true,
+        disabled: true,
     })
     EmployeeReminderSchedule = {
         rule: {
